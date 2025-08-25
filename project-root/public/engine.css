@@ -1,0 +1,88 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Layout */
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* Topbar */
+.topbar {
+  background: #232f3e;
+  color: white;
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.save-btn {
+  background: #ff9900;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* Sidebar */
+.sidebar {
+  background: #f4f4f4;
+  width: 200px;
+  padding: 20px;
+  border-right: 1px solid #ccc;
+  height: calc(100vh - 50px);
+  position: fixed;
+  top: 50px;
+  left: 0;
+  overflow-y: auto;
+}
+
+/* Preview area */
+.preview-area {
+  margin-left: 200px;
+  margin-top: 50px;
+  height: calc(100vh - 50px);
+  width: calc(100vw - 200px);
+  overflow: auto; /* scroll both ways */
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+/* Scaled preview */
+.preview-wrapper {
+  transform: scale(0.6);       /* shrink preview */
+  transform-origin: top left;
+  width: 1600px;               /* template’s real width */
+  height: auto;
+}
+
+.preview-wrapper iframe {
+  width: 1600px;               /* template’s real width */
+  height: 3000px;              /* make this tall enough for your site */
+  border: none;
+}
+.tool-btn.active-tool {
+  background-color: #007bff;
+  color: white;
+  border: 2px solid #0056b3;
+}
+.buy1 { background: #ff9900; color: white; border-radius: 4px; border: none; padding: 8px 16px; }
+.buy2 { background: #ff5722; color: white; border-radius: 20px; border: 2px solid #fff; padding: 8px 16px; }
+.buy3 { background: #4caf50; color: white; border-radius: 0; border: 1px solid #388e3c; padding: 8px 16px; }
+.buy4 { background: #2196f3; color: yellow; border-radius: 8px; border: 2px dashed #fff; padding: 8px 16px; }
+.buy5 { background: #9c27b0; color: white; border-radius: 12px; border: 3px double #fff; padding: 8px 16px; }
+
+.cart1 { background: #ff4081; color: white; border-radius: 4px; border: none; padding: 8px 16px; }
+.cart2 { background: #00bcd4; color: white; border-radius: 20px; border: 2px solid #fff; padding: 8px 16px; }
+.cart3 { background: #8bc34a; color: black; border-radius: 0; border: 1px solid #558b2f; padding: 8px 16px; }
+.cart4 { background: #ffc107; color: black; border-radius: 8px; border: 2px dashed #000; padding: 8px 16px; }
+.cart5 { background: #607d8b; color: white; border-radius: 12px; border: 3px double #fff; padding: 8px 16px; }
