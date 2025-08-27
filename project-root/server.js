@@ -1,3 +1,14 @@
+const { Pool } = require('pg');
+
+// Replace these with your Render PostgreSQL credentials
+const pool = new Pool({
+  user: 'onkaan_test_user',
+  host: 'dpg-d2nb7ga4d50c73e5kar0-a',  // your Render DB host
+  database: 'onkaan_test',
+  password: 'PDsOVhhtulaBieloPQkZJF4wpFguHkK4',        // replace with your DB password
+  port: 5432,
+});
+
 const express = require("express");
 const nodemailer = require("nodemailer");
 const archiver = require("archiver");
@@ -143,3 +154,4 @@ app.get("/send-template", async (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
