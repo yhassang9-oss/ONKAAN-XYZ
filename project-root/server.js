@@ -1,14 +1,4 @@
 const { Pool } = require('pg');
-
-// Replace these with your Render PostgreSQL credentials
-const pool = new Pool({
-  user: 'onkaan_test_user',
-  host: 'dpg-d2nb7ga4d50c73e5kar0-a',  // your Render DB host
-  database: 'onkaan_test',
-  password: 'PDsOVhhtulaBieloPQkZJF4wpFguHkK4',        // replace with your DB password
-  port: 5432,
-});
-
 const express = require("express");
 const nodemailer = require("nodemailer");
 const archiver = require("archiver");
@@ -21,27 +11,17 @@ const app = express();
 // Parse JSON for API requests
 app.use(bodyParser.json());
 
-// Serve static files (HTML, CSS, JS, images) from /public
+// Serve static files from /public
 app.use(express.static(path.join(__dirname, "public")));
 
-// Persistent session cache file
-const CACHE_FILE = path.join(__dirname, "sessionCache.json");
-
-// Load cache from disk on startup
-let sessionCache = {};
-if (fs.existsSync(CACHE_FILE)) {
-  try {
-    sessionCache = JSON.parse(fs.readFileSync(CACHE_FILE, "utf-8"));
-  } catch (err) {
-    console.error("Error reading sessionCache.json:", err);
-    sessionCache = {};
-  }
-}
-
-// Utility to save cache to disk
-function saveCache() {
-  fs.writeFileSync(CACHE_FILE, JSON.stringify(sessionCache, null, 2), "utf-8");
-}
+// PostgreSQL connection
+const pool = new Pool({
+  user: 'onkaan_test_user',
+  host: 'dpg-d2nb7ga4d50c73e5kar0-a',  
+  database: 'onkaan_test',
+  password: 'PDsOVhhtulaBieloPQkZJF4wpFguHkK4', 
+  port: 5432,
+});
 
 // Home route
 app.get("/", (req, res) => {
@@ -49,37 +29,47 @@ app.get("/", (req, res) => {
 });
 
 // Template route for live preview
-app.get("/template/:filename", (req, res) => {
+app.get("/template/:filename", async (req, res) => {
   const { filename } = req.params;
 
-  // 1️⃣ Serve from sessionCache if exists
-  if (sessionCache[filename]) {
-    return res.type("html").send(sessionCache[filename]);
+  try {
+    // Check database first
+    const result = await pool.query(
+      "SELECT content FROM session_cache WHERE filename=$1",
+      [filename]
+    );
+    if (result.rows.length > 0) {
+      return res.type("html").send(result.rows[0].content);
+    }
+  } catch (err) {
+    console.error("DB fetch error:", err);
   }
 
-  // 2️⃣ Otherwise check in /public
+  // Fallback: serve from /public or /public/templates
   let filePath = path.join(__dirname, "public", filename);
-
-  // 3️⃣ If not found, check in /public/templates
   if (!fs.existsSync(filePath)) {
     filePath = path.join(__dirname, "public", "templates", filename);
   }
 
-  // 4️⃣ Serve file if exists
-  if (fs.existsSync(filePath)) {
-    return res.sendFile(filePath);
-  }
+  if (fs.existsSync(filePath)) return res.sendFile(filePath);
 
-  // 5️⃣ File not found
   res.status(404).send("File not found");
 });
 
-// Auto-serve any HTML file (e.g., /account → account.html)
-app.get("/:page", (req, res, next) => {
+// Auto-serve any HTML file
+app.get("/:page", async (req, res, next) => {
   const filename = `${req.params.page}.html`;
 
-  if (sessionCache[filename]) {
-    return res.type("html").send(sessionCache[filename]);
+  try {
+    const result = await pool.query(
+      "SELECT content FROM session_cache WHERE filename=$1",
+      [filename]
+    );
+    if (result.rows.length > 0) {
+      return res.type("html").send(result.rows[0].content);
+    }
+  } catch (err) {
+    console.error("DB fetch error:", err);
   }
 
   const filePath = path.join(__dirname, "public", filename);
@@ -88,19 +78,34 @@ app.get("/:page", (req, res, next) => {
   next();
 });
 
-// Save edits temporarily in memory and disk
-app.post("/update", (req, res) => {
+// Save edits to PostgreSQL
+app.post("/update", async (req, res) => {
   const { filename, content } = req.body;
-  sessionCache[filename] = content;
-  saveCache(); // persist to disk
-  res.sendStatus(200);
+
+  try {
+    await pool.query(
+      `INSERT INTO session_cache (filename, content)
+       VALUES ($1, $2)
+       ON CONFLICT (filename)
+       DO UPDATE SET content = $2`,
+      [filename, content]
+    );
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("DB save error:", err);
+    res.status(500).send("Error saving session");
+  }
 });
 
 // Clear session cache
-app.post("/reset", (req, res) => {
-  sessionCache = {};
-  saveCache();
-  res.sendStatus(200);
+app.post("/reset", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM session_cache");
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("DB reset error:", err);
+    res.status(500).send("Error clearing session cache");
+  }
 });
 
 // Send zipped templates via email
@@ -154,4 +159,3 @@ app.get("/send-template", async (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-
