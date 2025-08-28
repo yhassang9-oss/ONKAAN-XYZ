@@ -309,6 +309,11 @@ buttonTool.addEventListener("click", () => {
 });
 
 // --- Auto-save to temporary DB ---
+const publishBtn = document.getElementById("publishBtn");
+
+publishBtn.addEventListener("click", () => {
+  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+  const htmlContent = iframeDoc.documentElement.outerHTML;
 function saveToTemporaryMemory() {
   const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
   const htmlContent = iframeDoc.documentElement.outerHTML;
@@ -339,6 +344,7 @@ function saveToTemporaryMemory() {
 
 // Save every 5s
 setInterval(saveToTemporaryMemory, 5000);
+
 
 
 
