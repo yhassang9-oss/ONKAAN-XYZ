@@ -313,19 +313,20 @@ function saveToTemporaryMemory() {
   const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
   const htmlContent = iframeDoc.documentElement.outerHTML;
 
+  // 🔹 Publish to your Render endpoint
   fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       projectName: "MyProject",
       html: htmlContent,
-      css: cssContent,
-      js: jsContent,
-      images
+      css: typeof cssContent !== "undefined" ? cssContent : "",
+      js: typeof jsContent !== "undefined" ? jsContent : "",
+      images: typeof images !== "undefined" ? images : []
     })
-  })
-  
-  
+  }).catch(err => console.error("Publish failed:", err));
+
+  // 🔹 Also save to temporary memory (local DB)
   fetch("/update", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -338,5 +339,6 @@ function saveToTemporaryMemory() {
 
 // Save every 5s
 setInterval(saveToTemporaryMemory, 5000);
+
 
 
