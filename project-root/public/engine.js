@@ -317,24 +317,57 @@ publishBtn.addEventListener("click", () => {
 });
 
 // Main save function
-function saveToTemporaryMemory(isPublish = false) {
+publishBtn.addEventListener("click", () => {
   const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-  const htmlContent = iframeDoc.documentElement.outerHTML;
+  const htmlContent = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
 
-  // 🔹 Publish to your Render endpoint (only when publish clicked)
-  if (isPublish) {
-    fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectName: "MyProject",
-        html: htmlContent,
-        css: typeof cssContent !== "undefined" ? cssContent : "",
-        js: typeof jsContent !== "undefined" ? jsContent : "",
-        images: typeof images !== "undefined" ? images : []
-      })
-    }).catch(err => console.error("Publish failed:", err));
-  }
+  // inline styles
+  let cssContent = "";
+  iframeDoc.querySelectorAll("style").forEach(tag => cssContent += tag.innerHTML + "\n");
+
+  // inline scripts
+  let jsContent = "";
+  iframeDoc.querySelectorAll("script").forEach(tag => jsContent += tag.innerHTML + "\n");
+
+  // collect images inside iframe
+  const images = [];
+  iframeDoc.querySelectorAll("img").forEach((img, i) => {
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.drawImage(img, 0, 0);
+      const dataUrl = canvas.toDataURL("image/png"); // convert to base64
+      images.push({ name: image${i + 1}.png, data: dataUrl.split(",")[1] });
+    } catch (err) {
+      console.warn("Skipping image (CORS issue):", img.src);
+    }
+  });
+
+  fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectName: "MyProject",
+      html: htmlContent,
+      css: cssContent,
+      js: jsContent,
+      images
+    })
+  })
+  .then(res => res.json())
+  .then(data => alert(data.message))
+  .catch(err => alert("Error sending files: " + err));
+});
+
+// --- Page switching (for small preview boxes) ---
+document.querySelectorAll(".page-box").forEach(box => {
+    box.addEventListener("click", () => {
+        const pageUrl = "/template/" + box.getAttribute("data-page"); // session-aware URL
+        previewFrame.src = pageUrl;
+    });
+});
 
   // 🔹 Always save to temporary memory
   fetch("/update", {
@@ -349,5 +382,6 @@ function saveToTemporaryMemory(isPublish = false) {
 
 // Auto-save every 5s
 setInterval(saveToTemporaryMemory, 5000);
+
 
 
