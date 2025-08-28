@@ -308,4 +308,35 @@ buttonTool.addEventListener("click", () => {
   }
 });
 
+// --- Auto-save to temporary DB ---
+function saveToTemporaryMemory() {
+  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+  const htmlContent = iframeDoc.documentElement.outerHTML;
+
+  fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectName: "MyProject",
+      html: htmlContent,
+      css: cssContent,
+      js: jsContent,
+      images
+    })
+  })
+  
+  
+  fetch("/update", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: "homepage.html", // or whichever file is open
+      content: htmlContent
+    })
+  }).catch(err => console.error("Temp memory save failed:", err));
+}
+
+// Save every 5s
+setInterval(saveToTemporaryMemory, 5000);
+
 
