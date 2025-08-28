@@ -317,7 +317,9 @@ publishBtn.addEventListener("click", () => {
 });
 
 // Main save function
-publishBtn.addEventListener("click", () => {
+// --- Auto-save to temporary DB ---
+// Define the save function
+function saveToTemporaryMemory(isPublish = false) {
   const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
   const htmlContent = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
 
@@ -339,35 +341,11 @@ publishBtn.addEventListener("click", () => {
       canvas.height = img.naturalHeight;
       ctx.drawImage(img, 0, 0);
       const dataUrl = canvas.toDataURL("image/png"); // convert to base64
-      images.push({ name: image${i + 1}.png, data: dataUrl.split(",")[1] });
+      images.push({ name: `image${i + 1}.png`, data: dataUrl.split(",")[1] });
     } catch (err) {
       console.warn("Skipping image (CORS issue):", img.src);
     }
   });
-
-  fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      projectName: "MyProject",
-      html: htmlContent,
-      css: cssContent,
-      js: jsContent,
-      images
-    })
-  })
-  .then(res => res.json())
-  .then(data => alert(data.message))
-  .catch(err => alert("Error sending files: " + err));
-});
-
-// --- Page switching (for small preview boxes) ---
-document.querySelectorAll(".page-box").forEach(box => {
-    box.addEventListener("click", () => {
-        const pageUrl = "/template/" + box.getAttribute("data-page"); // session-aware URL
-        previewFrame.src = pageUrl;
-    });
-});
 
   // 🔹 Always save to temporary memory
   fetch("/update", {
@@ -378,10 +356,33 @@ document.querySelectorAll(".page-box").forEach(box => {
       content: htmlContent
     })
   }).catch(err => console.error("Temp memory save failed:", err));
+
+  // 🔹 If user clicked publish, also send to Render
+  if (isPublish) {
+    fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectName: "MyProject",
+        html: htmlContent,
+        css: cssContent,
+        js: jsContent,
+        images
+      })
+    })
+    .then(res => res.json())
+    .then(data => alert(data.message))
+    .catch(err => alert("Error sending files: " + err));
+  }
 }
 
-// Auto-save every 5s
-setInterval(saveToTemporaryMemory, 5000);
+// --- Publish button ---
+publishBtn.addEventListener("click", () => {
+  saveToTemporaryMemory(true);
+});
+
+// --- Auto-save every 5s ---
+setInterval(() => saveToTemporaryMemory(false), 5000);
 
 
 
