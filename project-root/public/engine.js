@@ -309,29 +309,34 @@ buttonTool.addEventListener("click", () => {
 });
 
 // --- Auto-save to temporary DB ---
+// --- Auto-save to temporary DB + Publish ---
 const publishBtn = document.getElementById("publishBtn");
 
 publishBtn.addEventListener("click", () => {
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-  const htmlContent = iframeDoc.documentElement.outerHTML;
-function saveToTemporaryMemory() {
+  saveToTemporaryMemory(true); // 👈 call with "true" = manual publish
+});
+
+// Main save function
+function saveToTemporaryMemory(isPublish = false) {
   const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
   const htmlContent = iframeDoc.documentElement.outerHTML;
 
-  // 🔹 Publish to your Render endpoint
-  fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      projectName: "MyProject",
-      html: htmlContent,
-      css: typeof cssContent !== "undefined" ? cssContent : "",
-      js: typeof jsContent !== "undefined" ? jsContent : "",
-      images: typeof images !== "undefined" ? images : []
-    })
-  }).catch(err => console.error("Publish failed:", err));
+  // 🔹 Publish to your Render endpoint (only when publish clicked)
+  if (isPublish) {
+    fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectName: "MyProject",
+        html: htmlContent,
+        css: typeof cssContent !== "undefined" ? cssContent : "",
+        js: typeof jsContent !== "undefined" ? jsContent : "",
+        images: typeof images !== "undefined" ? images : []
+      })
+    }).catch(err => console.error("Publish failed:", err));
+  }
 
-  // 🔹 Also save to temporary memory (local DB)
+  // 🔹 Always save to temporary memory
   fetch("/update", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -342,9 +347,7 @@ function saveToTemporaryMemory() {
   }).catch(err => console.error("Temp memory save failed:", err));
 }
 
-// Save every 5s
+// Auto-save every 5s
 setInterval(saveToTemporaryMemory, 5000);
-
-
 
 
