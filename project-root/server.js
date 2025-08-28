@@ -23,6 +23,21 @@ const pool = new Pool({
   port: 5432,
 });
 
+// ✅ Ensure table exists on startup
+(async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS session_cache (
+        filename TEXT PRIMARY KEY,
+        content TEXT
+      )
+    `);
+    console.log("✅ session_cache table is ready");
+  } catch (err) {
+    console.error("❌ Error creating session_cache table:", err);
+  }
+})();
+
 // Home route
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
