@@ -58,6 +58,7 @@ function undo() {
     historyIndex--;
     const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
     iframeDoc.body.innerHTML = historyStack[historyIndex];
+    initIframe(iframeDoc); // Reattach iframe listeners
   }
 }
 
@@ -66,6 +67,7 @@ function redo() {
     historyIndex++;
     const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
     iframeDoc.body.innerHTML = historyStack[historyIndex];
+    initIframe(iframeDoc); // Reattach iframe listeners
   }
 }
 
@@ -118,7 +120,7 @@ async function loadTemporaryMemory(filename = "homepage.html") {
 // IFRAME CLICK HANDLER INITIALIZER
 // ===============================
 function initIframe(iframeDoc) {
-  // Click handler inside iframe
+  // Re-attach click listener inside iframe
   iframeDoc.addEventListener("click", (e) => {
     const el = e.target;
 
@@ -173,6 +175,29 @@ function initIframe(iframeDoc) {
       }
     }
   });
+
+  // Re-attach button panel listeners if it exists
+  if (buttonPanel) {
+    buttonPanel.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (selectedElement) selectedElement.className = btn.className;
+        saveHistory();
+      });
+    });
+  }
+
+  // Re-attach colorPanel listeners if it exists
+  if (colorPanel) {
+    colorPanel.querySelectorAll("div").forEach(swatch => {
+      swatch.addEventListener("click", () => {
+        if (!selectedElement) return;
+        const color = swatch.style.backgroundColor;
+        if (selectedElement.dataset.editable === "true") selectedElement.style.color = color;
+        else selectedElement.style.backgroundColor = color;
+        saveHistory();
+      });
+    });
+  }
 }
 
 // ===============================
@@ -183,4 +208,4 @@ loadTemporaryMemory("homepage.html");
 // ===============================
 // REST OF YOUR FUNCTIONS (RESIZE, COLOR, IMAGE, BUTTON, SAVE) …
 // ===============================
-// (keep everything else exactly as before)
+// Keep everything else exactly as before (resize, color, image, button, saveToTemporaryMemory, publishBtn, setInterval autosave)
