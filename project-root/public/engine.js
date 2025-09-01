@@ -11,12 +11,14 @@ const buttonTool = document.getElementById("Buttons");
 const publishBtn = document.getElementById("publishBtn");
 
 const previewFrame = document.getElementById("previewFrame");
+
 // Temporary session/user ID
-let userId = sessionStorage.getItem("userId");
-if (!userId) {
-  userId = Date.now().toString() + Math.random().toString(36).substring(2);
-  sessionStorage.setItem("userId", userId);
-}
+
+
+
+  // ... rest of your click handlers and select/text tool logic
+});
+
 
 
 let activeTool = null;
@@ -102,10 +104,42 @@ redoBtn.addEventListener("click", redo);
 // ===============================
 // IFRAME LOGIC
 // ===============================
-previewFrame.addEventListener("load", () => {
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-  saveHistory();
 
+  let userId = sessionStorage.getItem("userId");
+if (!userId) {
+  userId = Date.now().toString() + Math.random().toString(36).substring(2);
+  sessionStorage.setItem("userId", userId);
+}
+
+// ===============================
+// TEMPORARY MEMORY LOADER
+// ===============================
+async function loadTemporaryMemory(filename = "homepage.html") {
+  try {
+    const res = await fetch(`/template/${filename}?userId=${userId}`);
+    if (!res.ok) return;
+    const html = await res.text();
+    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
+    saveHistory(); // push loaded content to history stack
+  } catch (err) {
+    console.error("Failed to load temporary memory:", err);
+  }
+}
+
+// ===============================
+// IFRAME LOGIC
+// ===============================
+previewFrame.addEventListener("load", async () => {
+  // 1️⃣ Load temporary memory
+  await loadTemporaryMemory("homepage.html");
+
+  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+  saveHistory(); // save initial state
+
+  // 2️⃣ Click handler inside iframe
   iframeDoc.addEventListener("click", (e) => {
     const el = e.target;
 
@@ -131,7 +165,7 @@ previewFrame.addEventListener("load", () => {
 
     // --- Select Tool ---
     if (activeTool === "select") {
-      e.preventDefault(); 
+      e.preventDefault();
       e.stopPropagation();
 
       if (selectedElement) {
@@ -140,12 +174,12 @@ previewFrame.addEventListener("load", () => {
       }
 
       if (
-        (el.dataset.editable === "true") ||
+        el.dataset.editable === "true" ||
         el.tagName === "BUTTON" ||
         el.tagName === "IMG" ||
         el.classList.contains("slideshow-container") ||
         el.tagName === "DIV" ||
-        ["P", "H1", "H2", "H3", "H4", "H5", "H6", "SPAN", "A", "LABEL"].includes(el.tagName)
+        ["P","H1","H2","H3","H4","H5","H6","SPAN","A","LABEL"].includes(el.tagName)
       ) {
         selectedElement = el;
         selectedElement.style.outline = "2px dashed red";
@@ -161,6 +195,7 @@ previewFrame.addEventListener("load", () => {
     }
   });
 });
+
 
 // ===============================
 // RESIZING
@@ -319,7 +354,8 @@ function saveToTemporaryMemory(isPublish = false) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       filename: "homepage.html",
-      content: htmlContent
+      content: htmlContent,
+      userId: userId
     })
   }).catch(err => console.error("Temp memory save failed:", err));
 
@@ -354,11 +390,9 @@ function saveToTemporaryMemory(isPublish = false) {
         css: cssContent,
         js: jsContent,
         images
+        
       })
     })
-    .then(res => res.json())
-    .then(data => alert(data.message))
-    .catch(err => alert("Error sending files: " + err));
   }
 }
 
@@ -369,4 +403,5 @@ publishBtn.addEventListener("click", () => {
 
 // Auto-save every 5s
 setInterval(() => saveToTemporaryMemory(false), 5000);
+
 
