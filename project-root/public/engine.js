@@ -11,6 +11,13 @@ const buttonTool = document.getElementById("Buttons");
 const publishBtn = document.getElementById("publishBtn");
 
 const previewFrame = document.getElementById("previewFrame");
+// Temporary session/user ID
+let userId = sessionStorage.getItem("userId");
+if (!userId) {
+  userId = Date.now().toString() + Math.random().toString(36).substring(2);
+  sessionStorage.setItem("userId", userId);
+}
+
 
 let activeTool = null;
 let selectedElement = null;
@@ -362,3 +369,4 @@ publishBtn.addEventListener("click", () => {
 
 // Auto-save every 5s
 setInterval(() => saveToTemporaryMemory(false), 5000);
+
