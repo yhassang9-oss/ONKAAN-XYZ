@@ -7,11 +7,7 @@ const path = require("path");
 const bodyParser = require("body-parser");
 
 const app = express();
-
-// Parse JSON for API requests
 app.use(bodyParser.json());
-
-// Serve static files from /public
 app.use(express.static(path.join(__dirname, "public")));
 
 // PostgreSQL connection
@@ -23,13 +19,15 @@ const pool = new Pool({
   port: 5432,
 });
 
-// ✅ Ensure table exists on startup
+// Ensure session_cache table exists with user_id
 (async () => {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS session_cache (
-        filename TEXT PRIMARY KEY,
-        content TEXT
+        filename TEXT,
+        user_id TEXT,
+        content TEXT,
+        PRIMARY KEY (filename, user_id)
       )
     `);
     console.log("✅ session_cache table is ready");
@@ -43,15 +41,15 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Template route for live preview
+// Template route for live preview with optional userId
 app.get("/template/:filename", async (req, res) => {
   const { filename } = req.params;
+  const userId = req.query.userId || "default";
 
   try {
-    // Check database first
     const result = await pool.query(
-      "SELECT content FROM session_cache WHERE filename=$1",
-      [filename]
+      "SELECT content FROM session_cache WHERE filename=$1 AND user_id=$2",
+      [filename, userId]
     );
     if (result.rows.length > 0) {
       return res.type("html").send(result.rows[0].content);
@@ -60,7 +58,7 @@ app.get("/template/:filename", async (req, res) => {
     console.error("DB fetch error:", err);
   }
 
-  // Fallback: serve from /public or /public/templates
+  // Fallback to public files
   let filePath = path.join(__dirname, "public", filename);
   if (!fs.existsSync(filePath)) {
     filePath = path.join(__dirname, "public", "templates", filename);
@@ -71,14 +69,15 @@ app.get("/template/:filename", async (req, res) => {
   res.status(404).send("File not found");
 });
 
-// Auto-serve any HTML file
+// Auto-serve any HTML file with userId support
 app.get("/:page", async (req, res, next) => {
   const filename = `${req.params.page}.html`;
+  const userId = req.query.userId || "default";
 
   try {
     const result = await pool.query(
-      "SELECT content FROM session_cache WHERE filename=$1",
-      [filename]
+      "SELECT content FROM session_cache WHERE filename=$1 AND user_id=$2",
+      [filename, userId]
     );
     if (result.rows.length > 0) {
       return res.type("html").send(result.rows[0].content);
@@ -95,15 +94,16 @@ app.get("/:page", async (req, res, next) => {
 
 // Save edits to PostgreSQL
 app.post("/update", async (req, res) => {
-  const { filename, content } = req.body;
+  const { filename, content, userId } = req.body;
+  const uid = userId || "default";
 
   try {
     await pool.query(
-      `INSERT INTO session_cache (filename, content)
-       VALUES ($1, $2)
-       ON CONFLICT (filename)
-       DO UPDATE SET content = $2`,
-      [filename, content]
+      `INSERT INTO session_cache (filename, user_id, content)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (filename, user_id)
+       DO UPDATE SET content = $3`,
+      [filename, uid, content]
     );
     res.sendStatus(200);
   } catch (err) {
@@ -112,7 +112,7 @@ app.post("/update", async (req, res) => {
   }
 });
 
-// Clear session cache
+// Clear session cache (all users)
 app.post("/reset", async (req, res) => {
   try {
     await pool.query("DELETE FROM session_cache");
