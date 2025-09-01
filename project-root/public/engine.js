@@ -12,21 +12,18 @@ const publishBtn = document.getElementById("publishBtn");
 
 const previewFrame = document.getElementById("previewFrame");
 
-// Temporary session/user ID
-
-
-
-  // ... rest of your click handlers and select/text tool logic
-});
-
-
-
 let activeTool = null;
 let selectedElement = null;
 let historyStack = [];
 let historyIndex = -1;
 let colorPanel = null;
 let buttonPanel = null;
+
+let userId = sessionStorage.getItem("userId");
+if (!userId) {
+  userId = Date.now().toString() + Math.random().toString(36).substring(2);
+  sessionStorage.setItem("userId", userId);
+}
 
 // ===============================
 // TOOL TOGGLE
@@ -76,13 +73,8 @@ function redo() {
 // KEYBOARD SHORTCUTS
 // ===============================
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey && e.key === "z") {
-    e.preventDefault();
-    undo();
-  } else if (e.ctrlKey && e.key === "y") {
-    e.preventDefault();
-    redo();
-  }
+  if (e.ctrlKey && e.key === "z") { e.preventDefault(); undo(); }
+  else if (e.ctrlKey && e.key === "y") { e.preventDefault(); redo(); }
 });
 
 // ===============================
@@ -102,17 +94,7 @@ undoBtn.addEventListener("click", undo);
 redoBtn.addEventListener("click", redo);
 
 // ===============================
-// IFRAME LOGIC
-// ===============================
-
-  let userId = sessionStorage.getItem("userId");
-if (!userId) {
-  userId = Date.now().toString() + Math.random().toString(36).substring(2);
-  sessionStorage.setItem("userId", userId);
-}
-
-// ===============================
-// TEMPORARY MEMORY LOADER
+// TEMPORARY MEMORY LOADER + IFRAME INIT
 // ===============================
 async function loadTemporaryMemory(filename = "homepage.html") {
   try {
@@ -123,6 +105,9 @@ async function loadTemporaryMemory(filename = "homepage.html") {
     iframeDoc.open();
     iframeDoc.write(html);
     iframeDoc.close();
+
+    // Initialize iframe after content is written
+    initIframe(iframeDoc);
     saveHistory(); // push loaded content to history stack
   } catch (err) {
     console.error("Failed to load temporary memory:", err);
@@ -130,16 +115,10 @@ async function loadTemporaryMemory(filename = "homepage.html") {
 }
 
 // ===============================
-// IFRAME LOGIC
+// IFRAME CLICK HANDLER INITIALIZER
 // ===============================
-previewFrame.addEventListener("load", async () => {
-  // 1️⃣ Load temporary memory
-  await loadTemporaryMemory("homepage.html");
-
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-  saveHistory(); // save initial state
-
-  // 2️⃣ Click handler inside iframe
+function initIframe(iframeDoc) {
+  // Click handler inside iframe
   iframeDoc.addEventListener("click", (e) => {
     const el = e.target;
 
@@ -194,214 +173,14 @@ previewFrame.addEventListener("load", async () => {
       }
     }
   });
-});
-
-
-// ===============================
-// RESIZING
-// ===============================
-function removeHandles(doc) { doc.querySelectorAll(".resize-handle").forEach(h => h.remove()); }
-
-function makeResizable(el, doc) {
-  removeHandles(doc);
-  const handle = doc.createElement("div");
-  handle.className = "resize-handle";
-  handle.style.cssText = `
-    width:10px;height:10px;background:red;position:absolute;
-    right:0;bottom:0;cursor:se-resize;z-index:9999;
-  `;
-  el.style.position = "relative";
-  el.appendChild(handle);
-
-  let isResizing = false;
-  let startX, startY, startWidth, startHeight;
-
-  handle.addEventListener("mousedown", (e) => {
-    e.preventDefault(); e.stopPropagation();
-    isResizing = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    startWidth = parseInt(getComputedStyle(el).width, 10);
-    startHeight = parseInt(getComputedStyle(el).height, 10);
-
-    function resizeMove(ev) {
-      if (!isResizing) return;
-      el.style.width = startWidth + (ev.clientX - startX) + "px";
-      el.style.height = startHeight + (ev.clientY - startY) + "px";
-    }
-    function stopResize() {
-      if (isResizing) saveHistory();
-      isResizing = false;
-      doc.removeEventListener("mousemove", resizeMove);
-      doc.removeEventListener("mouseup", stopResize);
-    }
-    doc.addEventListener("mousemove", resizeMove);
-    doc.addEventListener("mouseup", stopResize);
-  });
 }
 
 // ===============================
-// COLOR TOOL
+// INITIAL LOAD
 // ===============================
-colorTool.addEventListener("click", () => {
-  if (!selectedElement) { alert("Select an element first!"); return; }
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-
-  if (colorPanel) { colorPanel.remove(); colorPanel = null; return; }
-
-  colorPanel = iframeDoc.createElement("div");
-  colorPanel.style.cssText = `
-    position:fixed;top:20px;left:20px;background:#fff;border:1px solid #ccc;
-    padding:10px;display:grid;grid-template-columns:repeat(8,30px);grid-gap:5px;z-index:9999;
-  `;
-
-  const colors = [
-    "#000000","#808080","#C0C0C0","#FFFFFF","#800000","#FF0000","#808000","#FFFF00",
-    "#008000","#00FF00","#008080","#00FFFF","#000080","#0000FF","#800080","#FF00FF"
-  ];
-
-  colors.forEach(c => {
-    const swatch = iframeDoc.createElement("div");
-    swatch.style.cssText = `width:30px;height:30px;background:${c};cursor:pointer;border:1px solid #555;`;
-    swatch.addEventListener("click", () => {
-      if (!selectedElement) return;
-      if (selectedElement.dataset.editable === "true") selectedElement.style.color = c;
-      else selectedElement.style.backgroundColor = c;
-      saveHistory();
-    });
-    colorPanel.appendChild(swatch);
-  });
-
-  iframeDoc.body.appendChild(colorPanel);
-});
+loadTemporaryMemory("homepage.html");
 
 // ===============================
-// IMAGE TOOL
+// REST OF YOUR FUNCTIONS (RESIZE, COLOR, IMAGE, BUTTON, SAVE) …
 // ===============================
-imageTool.addEventListener("click", () => {
-  if (!selectedElement || !(selectedElement.tagName === "IMG" || selectedElement.classList.contains("slideshow-container"))) {
-    alert("Select an image or slideshow first."); return;
-  }
-  const input = document.createElement("input");
-  input.type = "file"; input.accept = "image/*"; input.click();
-  input.onchange = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (selectedElement.tagName === "IMG") selectedElement.src = ev.target.result;
-      else if (selectedElement.classList.contains("slideshow-container")) {
-        const firstSlide = selectedElement.querySelector(".slide");
-        if (firstSlide) firstSlide.src = ev.target.result;
-      }
-      saveHistory();
-    };
-    reader.readAsDataURL(file);
-  };
-});
-
-// ===============================
-// BUTTON TOOL
-// ===============================
-buttonTool.addEventListener("click", () => {
-  if (!selectedElement || selectedElement.tagName !== "BUTTON") { alert("Select a button first!"); return; }
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-
-  if (!buttonPanel) {
-    buttonPanel = iframeDoc.createElement("div");
-    buttonPanel.id = "buttonDesignPanel";
-    buttonPanel.style.cssText = "position:fixed;top:50px;left:20px;background:#fff;border:1px solid #ccc;padding:10px;z-index:9999;";
-    buttonPanel.innerHTML = `
-      <h3>Buy Now Designs</h3>
-      <div class="designs">
-        <button class="buyDesign1">1</button>
-        <button class="buyDesign2">2</button>
-        <button class="buyDesign3">3</button>
-        <button class="buyDesign4">4</button>
-        <button class="buyDesign5">5</button>
-      </div>
-      <h3>Add to Cart Designs</h3>
-      <div class="designs">
-        <button class="addDesign1">1</button>
-        <button class="addDesign2">2</button>
-        <button class="addDesign3">3</button>
-        <button class="addDesign4">4</button>
-        <button class="addDesign5">5</button>
-      </div>
-    `;
-    iframeDoc.body.appendChild(buttonPanel);
-
-    buttonPanel.querySelectorAll("button").forEach(btn => {
-      btn.addEventListener("click", () => {
-        if (selectedElement) selectedElement.className = btn.className;
-        saveHistory();
-      });
-    });
-  } else {
-    buttonPanel.style.display = buttonPanel.style.display === "none" ? "block" : "none";
-  }
-});
-
-// ===============================
-// SAVE TO TEMPORARY MEMORY + PUBLISH
-// ===============================
-function saveToTemporaryMemory(isPublish = false) {
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-  const htmlContent = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
-
-  // 🔹 Always save to temporary DB
-  fetch("/update", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      filename: "homepage.html",
-      content: htmlContent,
-      userId: userId
-    })
-  }).catch(err => console.error("Temp memory save failed:", err));
-
-  // 🔹 If publishing → send to Render
-  if (isPublish) {
-    let cssContent = "";
-    iframeDoc.querySelectorAll("style").forEach(tag => cssContent += tag.innerHTML + "\n");
-    let jsContent = "";
-    iframeDoc.querySelectorAll("script").forEach(tag => jsContent += tag.innerHTML + "\n");
-
-    const images = [];
-    iframeDoc.querySelectorAll("img").forEach((img, i) => {
-      try {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        ctx.drawImage(img, 0, 0);
-        const dataUrl = canvas.toDataURL("image/png");
-        images.push({ name: `image${i + 1}.png`, data: dataUrl.split(",")[1] });
-      } catch (err) {
-        console.warn("Skipping image (CORS issue):", img.src);
-      }
-    });
-
-    fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectName: "MyProject",
-        html: htmlContent,
-        css: cssContent,
-        js: jsContent,
-        images
-        
-      })
-    })
-  }
-}
-
-// Publish button
-publishBtn.addEventListener("click", () => {
-  saveToTemporaryMemory(true);
-});
-
-// Auto-save every 5s
-setInterval(() => saveToTemporaryMemory(false), 5000);
-
-
+// (keep everything else exactly as before)
