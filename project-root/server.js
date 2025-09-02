@@ -1,5 +1,13 @@
 require("dotenv").config(); // 👈 load .env first
 
+
+console.log("DB_HOST =", process.env.DB_HOST);
+console.log("DB_PORT =", process.env.DB_PORT);
+console.log("DB_USERNAME =", process.env.DB_USERNAME);
+console.log("DB_DATABASE =", process.env.DB_DATABASE);
+
+
+
 const express = require("express");
 const nodemailer = require("nodemailer");
 const archiver = require("archiver");
@@ -172,3 +180,4 @@ app.get("/send-template", async (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
