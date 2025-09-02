@@ -10,7 +10,8 @@
   <!-- Topbar -->
   <header class="topbar">
     <h1>ONKAAN Editor</h1>
-    <button class="save-btn" id="publishBtn">Publish</button>
+    <!-- ✅ Updated to call publishProject() -->
+   <button class="save-btn" id="publishBtn">Publish</button>
   </header>
 
   <!-- Sidebar -->
@@ -29,13 +30,13 @@
 
   <!-- Preview -->
   <main class="preview-area">
-    <div class="preview-wrapper" style="width:100%; height:100%;">
-      <iframe id="previewFrame" src="homepage.html" style="width:100%; height:500px; border:2px solid #000;"></iframe>
+    <div class="preview-wrapper">
+      <iframe id="previewFrame" src="homepage.html"></iframe>
     </div>
   </main>
 
   <!-- Button Design Panel -->
-  <div id="buttonPanel" style="display:none; position:absolute; top:50px; left:220px; background:#fff; border:1px solid #ccc; padding:10px; z-index:9999;">
+  <div id="buttonDesignPanel" style="display:none; position:absolute; top:50px; left:220px; background:#fff; border:1px solid #ccc; padding:10px; z-index:9999;">
     <h3>Buy Now Designs</h3>
     <div class="designs">
       <button class="buy1">1</button>
@@ -54,20 +55,9 @@
     </div>
   </div>
 
-  <!-- Color Panel -->
-  <div id="colorPanel" style="display:none; position:absolute; top:50px; left:220px; background:#fff; border:1px solid #ccc; padding:10px; z-index:9999;">
-    <h3>Choose Color</h3>
-    <div>
-      <div style="background:#ff0000; width:30px; height:30px; display:inline-block; margin:5px;"></div>
-      <div style="background:#00ff00; width:30px; height:30px; display:inline-block; margin:5px;"></div>
-      <div style="background:#0000ff; width:30px; height:30px; display:inline-block; margin:5px;"></div>
-      <div style="background:#ffff00; width:30px; height:30px; display:inline-block; margin:5px;"></div>
-      <div style="background:#000000; width:30px; height:30px; display:inline-block; margin:5px;"></div>
-    </div>
-  </div>
-
   <!-- Scripts -->
   <script src="engine.js"></script>
 </body>
 </html>
+
 
