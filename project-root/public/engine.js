@@ -300,3 +300,16 @@ publishBtn.addEventListener("click", () => {
   .then(data => alert(data.message))
   .catch(err => alert("Error sending files: " + err));
 });
+
+// --- Load homepage.html on startup ---
+document.addEventListener("DOMContentLoaded", () => {
+  fetch("homepage.html")
+    .then(res => res.text())
+    .then(html => {
+      const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+      saveHistory();
+    });
+});
