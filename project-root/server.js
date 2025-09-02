@@ -1,136 +1,134 @@
-const { Pool } = require('pg');
+require("dotenv").config(); // 👈 load .env first
+
 const express = require("express");
 const nodemailer = require("nodemailer");
 const archiver = require("archiver");
 const fs = require("fs");
 const path = require("path");
 const bodyParser = require("body-parser");
+const mysql = require("mysql2/promise"); // ✅ MySQL/TiDB client
 
 const app = express();
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, "public")));
 
-// PostgreSQL connection
-const pool = new Pool({
-  user: 'onkaan_test_user',
-  host: 'dpg-d2nb7ga4d50c73e5kar0-a',  
-  database: 'onkaan_test',
-  password: 'PDsOVhhtulaBieloPQkZJF4wpFguHkK4', 
-  port: 5432,
+// ✅ TiDB connection pool (from .env)
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+  port: process.env.DB_PORT,
+  ssl: {
+    ca: fs.readFileSync(process.env.DB_CA || "./ca.pem"), // 👈 default to ./ca.pem
+  },
 });
 
-// Ensure session_cache table exists with user_id
-(async () => {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS session_cache (
-        filename TEXT,
-        user_id TEXT,
-        content TEXT,
-        PRIMARY KEY (filename, user_id)
-      )
-    `);
-    console.log("✅ session_cache table is ready");
-  } catch (err) {
-    console.error("❌ Error creating session_cache table:", err);
-  }
-})();
+// Serve static files from /public
+app.use(express.static(path.join(__dirname, "public")));
 
 // Home route
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "public", "homepage.html"));
 });
 
-// Template route for live preview with optional userId
+// --- Template route (iframe live preview) ---
 app.get("/template/:filename", async (req, res) => {
   const { filename } = req.params;
-  const userId = req.query.userId || "default";
 
   try {
-    const result = await pool.query(
-      "SELECT content FROM session_cache WHERE filename=$1 AND user_id=$2",
-      [filename, userId]
+    // 1. Look for cached version in DB
+    const [rows] = await pool.query(
+      "SELECT content FROM pages WHERE filename = ? LIMIT 1",
+      [filename]
     );
-    if (result.rows.length > 0) {
-      return res.type("html").send(result.rows[0].content);
+    if (rows.length > 0) {
+      res.type("html").send(rows[0].content);
+      return;
+    }
+
+    // 2. Look in /public
+    let filePath = path.join(__dirname, "public", filename);
+
+    // 3. Look in /public/templates if not found
+    if (!fs.existsSync(filePath)) {
+      filePath = path.join(__dirname, "public", "templates", filename);
+    }
+
+    // 4. Serve file if exists
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(404).send("File not found");
     }
   } catch (err) {
-    console.error("DB fetch error:", err);
+    console.error("DB Error:", err);
+    res.status(500).send("Database error");
   }
-
-  // Fallback to public files
-  let filePath = path.join(__dirname, "public", filename);
-  if (!fs.existsSync(filePath)) {
-    filePath = path.join(__dirname, "public", "templates", filename);
-  }
-
-  if (fs.existsSync(filePath)) return res.sendFile(filePath);
-
-  res.status(404).send("File not found");
 });
 
-// Auto-serve any HTML file with userId support
+// Auto-serve any HTML page by name (with DB support)
 app.get("/:page", async (req, res, next) => {
   const filename = `${req.params.page}.html`;
-  const userId = req.query.userId || "default";
 
   try {
-    const result = await pool.query(
-      "SELECT content FROM session_cache WHERE filename=$1 AND user_id=$2",
-      [filename, userId]
+    const [rows] = await pool.query(
+      "SELECT content FROM pages WHERE filename = ? LIMIT 1",
+      [filename]
     );
-    if (result.rows.length > 0) {
-      return res.type("html").send(result.rows[0].content);
+    if (rows.length > 0) {
+      res.type("html").send(rows[0].content);
+      return;
+    }
+
+    const filePath = path.join(__dirname, "public", filename);
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      next();
     }
   } catch (err) {
-    console.error("DB fetch error:", err);
+    console.error("DB Error:", err);
+    res.status(500).send("Database error");
   }
-
-  const filePath = path.join(__dirname, "public", filename);
-  if (fs.existsSync(filePath)) return res.sendFile(filePath);
-
-  next();
 });
 
-// Save edits to PostgreSQL
+// ✅ Save edits permanently in DB
 app.post("/update", async (req, res) => {
-  const { filename, content, userId } = req.body;
-  const uid = userId || "default";
+  const { filename, content } = req.body;
+  if (!filename || !content) {
+    return res.status(400).send("Missing filename or content");
+  }
 
   try {
     await pool.query(
-      `INSERT INTO session_cache (filename, user_id, content)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (filename, user_id)
-       DO UPDATE SET content = $3`,
-      [filename, uid, content]
+      "INSERT INTO pages (filename, content) VALUES (?, ?) ON DUPLICATE KEY UPDATE content = VALUES(content)",
+      [filename, content]
     );
     res.sendStatus(200);
   } catch (err) {
-    console.error("DB save error:", err);
-    res.status(500).send("Error saving session");
+    console.error("DB Error:", err);
+    res.status(500).send("Error saving file");
   }
 });
 
-// Clear session cache (all users)
+// ✅ Reset pages (clear DB)
 app.post("/reset", async (req, res) => {
   try {
-    await pool.query("DELETE FROM session_cache");
+    await pool.query("DELETE FROM pages");
     res.sendStatus(200);
   } catch (err) {
-    console.error("DB reset error:", err);
-    res.status(500).send("Error clearing session cache");
+    console.error("DB Error:", err);
+    res.status(500).send("Error resetting pages");
   }
 });
 
-// Send zipped templates via email
+// ✅ Send zipped templates via email
 app.get("/send-template", async (req, res) => {
   try {
     const zipPath = path.join(__dirname, "template.zip");
 
     const output = fs.createWriteStream(zipPath);
     const archive = archiver("zip", { zlib: { level: 9 } });
-
     archive.pipe(output);
     archive.directory(path.join(__dirname, "public", "templates/"), false);
     archive.finalize();
