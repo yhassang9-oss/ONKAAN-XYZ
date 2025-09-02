@@ -16,8 +16,8 @@ let selectedElement = null;
 let historyStack = [];
 let historyIndex = -1;
 
-let colorPanel = document.getElementById("colorPanel"); // Ensure div#colorPanel exists
-let buttonPanel = document.getElementById("buttonPanel"); // Ensure div#buttonPanel exists
+let colorPanel = document.getElementById("colorPanel");
+let buttonPanel = document.getElementById("buttonPanel");
 
 // ===============================
 // TOOL TOGGLE
@@ -26,6 +26,10 @@ function deactivateAllTools() {
     activeTool = null;
     textTool.classList.remove("active-tool");
     selectTool.classList.remove("active-tool");
+    colorTool.classList.remove("active-tool");
+    buttonTool.classList.remove("active-tool");
+    colorPanel.style.display = "none";
+    buttonPanel.style.display = "none";
 
     if (selectedElement) {
         selectedElement.style.outline = "none";
@@ -99,8 +103,34 @@ selectTool.addEventListener("click", () => {
     }
 });
 
+colorTool.addEventListener("click", () => {
+    if (activeTool === "color") deactivateAllTools();
+    else {
+        deactivateAllTools();
+        activeTool = "color";
+        colorTool.classList.add("active-tool");
+        colorPanel.style.display = "block";
+    }
+});
+
+buttonTool.addEventListener("click", () => {
+    if (activeTool === "buttons") deactivateAllTools();
+    else {
+        deactivateAllTools();
+        activeTool = "buttons";
+        buttonTool.classList.add("active-tool");
+        buttonPanel.style.display = "block";
+    }
+});
+
 undoBtn.addEventListener("click", undo);
 redoBtn.addEventListener("click", redo);
+
+publishBtn.addEventListener("click", () => {
+    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+    console.log("Published content:", iframeDoc.body.innerHTML);
+    // Add actual publish logic here (e.g., save to server)
+});
 
 // ===============================
 // RESIZE HANDLES (STUB)
@@ -120,25 +150,19 @@ function removeHandles(iframeDoc) {
 function initIframe(iframeDoc, resetClickListener = true) {
     selectedElement = null;
 
-    // Avoid replacing body unnecessarily to prevent content loss
+    // Apply basic styling to ensure visibility
     const body = iframeDoc.body;
-
-    // Apply vibrant styling to match gallery aesthetic
-    body.style.background = "linear-gradient(135deg, #ff6b6b, #4ecdc4)";
-    body.style.position = "relative";
-    body.style.minHeight = "100vh";
     body.style.margin = "0";
-    body.style.padding = "20px";
+    body.style.padding = "10px";
     body.style.boxSizing = "border-box";
-    body.style.overflowX = "hidden";
+    body.style.minHeight = "100%";
+    body.style.position = "relative";
 
     if (resetClickListener) {
-        // Clone body to remove old listeners, but preserve content
         const newBody = body.cloneNode(true);
         iframeDoc.body.replaceWith(newBody);
     }
 
-    // Re-reference body after potential replacement
     const updatedBody = iframeDoc.body;
 
     updatedBody.addEventListener("click", function (e) {
@@ -155,11 +179,7 @@ function initIframe(iframeDoc, resetClickListener = true) {
             newText.style.left = `${e.clientX - rect.left}px`;
             newText.style.top = `${e.clientY - rect.top}px`;
             newText.style.fontSize = "16px";
-            newText.style.color = "#fff";
-            newText.style.padding = "8px";
-            newText.style.borderRadius = "4px";
-            newText.style.background = "rgba(0,0,0,0.3)";
-            newText.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+            newText.style.color = "#000";
             updatedBody.appendChild(newText);
             newText.focus();
             saveHistory();
@@ -184,7 +204,7 @@ function initIframe(iframeDoc, resetClickListener = true) {
                 ["P", "H1", "H2", "H3", "H4", "H5", "H6", "SPAN", "A", "LABEL"].includes(el.tagName)
             ) {
                 selectedElement = el;
-                selectedElement.style.outline = "2px dashed #ff6b6b";
+                selectedElement.style.outline = "2px dashed red";
                 makeResizable(selectedElement, iframeDoc);
 
                 if (["P", "H1", "H2", "H3", "H4", "H5", "H6", "SPAN", "A", "LABEL"].includes(el.tagName)) {
@@ -203,6 +223,7 @@ function initIframe(iframeDoc, resetClickListener = true) {
             btn.onclick = () => {
                 if (selectedElement) {
                     selectedElement.className = btn.className;
+                    selectedElement.textContent = btn.textContent;
                     saveHistory();
                 }
             };
@@ -237,30 +258,23 @@ iframeDoc.write(`
     <head>
         <style>
             body {
-                background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
-                min-height: 100vh;
                 margin: 0;
-                padding: 20px;
+                padding: 10px;
                 box-sizing: border-box;
-                overflow-x: hidden;
+                min-height: 100%;
                 position: relative;
-                color: #fff;
+                background: #fff;
                 font-family: Arial, sans-serif;
             }
             .welcome {
                 text-align: center;
-                font-size: 24px;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-                animation: fadeInDown 1s ease-out;
-            }
-            @keyframes fadeInDown {
-                from { opacity: 0; transform: translateY(-20px); }
-                to { opacity: 1; transform: translateY(0); }
+                font-size: 18px;
+                color: #333;
             }
         </style>
     </head>
     <body>
-        <div class="welcome">Welcome to Your Editor</div>
+        <div class="welcome">Welcome to ONKAAN Editor</div>
     </body>
     </html>
 `);
