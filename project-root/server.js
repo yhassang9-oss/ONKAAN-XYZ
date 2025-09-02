@@ -27,8 +27,9 @@ const pool = mysql.createPool({
   database: process.env.DB_DATABASE,
   port: process.env.DB_PORT,
   ssl: {
-    ca: fs.readFileSync(process.env.DB_CA || "./ca.pem"), // 👈 default to ./ca.pem
-  },
+  ca: process.env.DB_CA
+},
+
 });
 
 // Serve static files from /public
@@ -180,4 +181,5 @@ app.get("/send-template", async (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
 
