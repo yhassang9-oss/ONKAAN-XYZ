@@ -1,12 +1,9 @@
 require("dotenv").config(); // 👈 load .env first
 
-
 console.log("DB_HOST =", process.env.DB_HOST);
 console.log("DB_PORT =", process.env.DB_PORT);
 console.log("DB_USERNAME =", process.env.DB_USERNAME);
 console.log("DB_DATABASE =", process.env.DB_DATABASE);
-
-
 
 const express = require("express");
 const nodemailer = require("nodemailer");
@@ -31,7 +28,6 @@ const pool = mysql.createPool({
     ca: process.env.DB_CA || fs.readFileSync(path.join(__dirname, "ca.pem"), "utf8")
   },
 });
-
 
 // Serve static files from /public
 app.use(express.static(path.join(__dirname, "public")));
@@ -132,6 +128,21 @@ app.post("/reset", async (req, res) => {
   }
 });
 
+// ✅ NEW: Save editor state from frontend (for Save button)
+app.post("/api/save", (req, res) => {
+  const { id, template } = req.body;
+
+  if (!id || !template) {
+    return res.json({ success: false, error: "Missing id or template" });
+  }
+
+  // For now: just log + confirm (you can extend to DB/file storage later)
+  console.log("Saving project:", id);
+  // console.log(template);
+
+  res.json({ success: true, message: "✅ Saved successfully!" });
+});
+
 // ✅ Send zipped templates via email
 app.get("/send-template", async (req, res) => {
   try {
@@ -182,6 +193,3 @@ app.get("/send-template", async (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-
-
-
