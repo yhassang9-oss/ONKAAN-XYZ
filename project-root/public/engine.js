@@ -310,18 +310,27 @@ if (saveBtn) {
     const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
     const template = iframeDoc.body.innerHTML;
 
+// --- 🔹 NEW Save Button handler ---
+if (saveBtn) {
+  saveBtn.addEventListener("click", async () => {
+    // grab the iframe’s body as template (you don’t have getEditorState defined)
+    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+    const template = iframeDoc.body.innerHTML;
+
+    const websiteId = "site123"; // static for now
+
     try {
-      const response = await fetch("/api/save", {
+      const response = await fetch("https://onkaan-xyz23.onrender.com/update", {  // 👈 correct endpoint
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: "site123", template })
+        body: JSON.stringify({ filename: websiteId + ".html", content: template })
       });
 
-      const result = await response.json();
-      if (result.success) {
+      if (response.ok) {
         alert("✅ Saved successfully!");
       } else {
-        alert("❌ Save failed: " + result.error);
+        const error = await response.text();
+        alert("❌ Save failed: " + error);
       }
     } catch (err) {
       console.error(err);
@@ -329,6 +338,7 @@ if (saveBtn) {
     }
   });
 }
+
 
 // --- Load homepage.html on startup ---
 document.addEventListener("DOMContentLoaded", () => {
@@ -342,3 +352,4 @@ document.addEventListener("DOMContentLoaded", () => {
       saveHistory();
     });
 });
+
