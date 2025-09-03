@@ -27,10 +27,11 @@ const pool = mysql.createPool({
   database: process.env.DB_DATABASE,
   port: process.env.DB_PORT,
   ssl: {
-  ca: process.env.DB_CA
-},
-
+    // If CA cert is in env, use it; otherwise try to load from file
+    ca: process.env.DB_CA || fs.readFileSync(path.join(__dirname, "ca.pem"), "utf8")
+  },
 });
+
 
 // Serve static files from /public
 app.use(express.static(path.join(__dirname, "public")));
@@ -181,5 +182,6 @@ app.get("/send-template", async (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
 
 
