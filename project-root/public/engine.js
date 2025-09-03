@@ -8,6 +8,9 @@ const buttonTool = document.getElementById("Buttons");
 const previewFrame = document.getElementById("previewFrame");
 const publishBtn = document.querySelector(".save-btn");
 
+// 🔹 NEW: save button (separate from publish)
+const saveBtn = document.getElementById("saveBtn");
+
 let activeTool = null;
 let selectedElement = null;
 let historyStack = [];
@@ -300,6 +303,32 @@ publishBtn.addEventListener("click", () => {
   .then(data => alert(data.message))
   .catch(err => alert("Error sending files: " + err));
 });
+
+// --- 🔹 NEW Save Button handler ---
+if (saveBtn) {
+  saveBtn.addEventListener("click", async () => {
+    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+    const template = iframeDoc.body.innerHTML;
+
+    try {
+      const response = await fetch("/api/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: "site123", template })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert("✅ Saved successfully!");
+      } else {
+        alert("❌ Save failed: " + result.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("❌ Save failed: " + err.message);
+    }
+  });
+}
 
 // --- Load homepage.html on startup ---
 document.addEventListener("DOMContentLoaded", () => {
