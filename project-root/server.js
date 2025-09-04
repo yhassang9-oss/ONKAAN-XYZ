@@ -102,7 +102,7 @@ app.get("/:page", async (req, res, next) => {
 app.post("/update", async (req, res) => {
   const { filename, content } = req.body;
   if (!filename || !content) {
-    return res.status(400).send("Missing filename or content");
+    return res.status(400).json({ success: false, error: "Missing filename or content" });
   }
 
   try {
@@ -110,10 +110,10 @@ app.post("/update", async (req, res) => {
       "INSERT INTO pages (filename, content) VALUES (?, ?) ON DUPLICATE KEY UPDATE content = VALUES(content)",
       [filename, content]
     );
-    res.sendStatus(200);
+    res.json({ success: true, message: "✅ Saved successfully!" });
   } catch (err) {
     console.error("DB Error:", err);
-    res.status(500).send("Error saving file");
+    res.status(500).json({ success: false, error: "Error saving file" });
   }
 });
 
@@ -121,26 +121,11 @@ app.post("/update", async (req, res) => {
 app.post("/reset", async (req, res) => {
   try {
     await pool.query("DELETE FROM pages");
-    res.sendStatus(200);
+    res.json({ success: true });
   } catch (err) {
     console.error("DB Error:", err);
-    res.status(500).send("Error resetting pages");
+    res.status(500).json({ success: false, error: "Error resetting pages" });
   }
-});
-
-// ✅ NEW: Save editor state from frontend (for Save button)
-app.post("/api/save", (req, res) => {
-  const { id, template } = req.body;
-
-  if (!id || !template) {
-    return res.json({ success: false, error: "Missing id or template" });
-  }
-
-  // For now: just log + confirm (you can extend to DB/file storage later)
-  console.log("Saving project:", id);
-  // console.log(template);
-
-  res.json({ success: true, message: "✅ Saved successfully!" });
 });
 
 // ✅ Send zipped templates via email
