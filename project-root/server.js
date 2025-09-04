@@ -30,7 +30,6 @@ const pool = mysql.createPool({
   database: process.env.DB_DATABASE,
   port: process.env.DB_PORT,
   ssl: {
-    // If CA cert is in env, use it; otherwise try to load from file
     ca: process.env.DB_CA || fs.readFileSync(path.join(__dirname, "ca.pem"), "utf8")
   },
 });
@@ -123,15 +122,14 @@ app.post("/update", async (req, res) => {
   }
 });
 
-// ✅ Load saved template by ID (filename)
+// ✅ Load saved template by ID (no .html auto-append)
 app.get("/api/load/:id", async (req, res) => {
-  const websiteId = req.params.id; // e.g. "homepage"
-  const filename = `${websiteId}.html`;
+  const websiteId = req.params.id; // must match save `filename`
 
   try {
     const [rows] = await pool.query(
       "SELECT content FROM pages WHERE filename = ? LIMIT 1",
-      [filename]
+      [websiteId]
     );
     if (rows.length > 0) {
       res.json({ success: true, template: rows[0].content });
