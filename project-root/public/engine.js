@@ -228,7 +228,7 @@ buttonTool.addEventListener("click", () => {
         buttonPanel = iframeDoc.createElement("div");
         buttonPanel.id = "buttonDesignPanel";
         buttonPanel.style.position = "fixed"; buttonPanel.style.top = "50px"; buttonPanel.style.left = "20px";
-        buttonPanel.style.background = "#fff"; buttonPanel.style.border = "1px solid #ccc"; buttonPanel.style.padding = "10px";
+        buttonPanel.style.background = "#fff"; buttonPanel.style.border = "1px solid "#ccc"; buttonPanel.style.padding = "10px";
         buttonPanel.style.zIndex = "9999";
         buttonPanel.innerHTML = `
             <h3>Buy Now Designs</h3>
@@ -308,6 +308,8 @@ publishBtn.addEventListener("click", () => {
 if (saveBtn) {
   saveBtn.addEventListener("click", async () => {
     const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+
+    // ✅ Save the entire page HTML
     const template = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
     const filename = "homepage.html";
 
@@ -332,21 +334,37 @@ if (saveBtn) {
   });
 }
 
-// --- 🔹 Load homepage.html from DB on startup ---
+// --- 🔹 Load homepage.html from DB on startup (fallback to static if none) ---
 async function loadTemplate() {
-  const websiteId = "homepage"; // match the filename
+  const filename = "homepage.html";
   try {
-    const response = await fetch(`https://onkaan-xyz23.onrender.com/api/load/${websiteId}`);
+    // 1) Try DB-backed version
+    const api = `https://onkaan-xyz23.onrender.com/api/load/${encodeURIComponent(filename)}`;
+    const response = await fetch(api);
     const result = await response.json();
-    if (result.success) {
-      const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+
+    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+
+    if (result && result.success && result.template) {
       iframeDoc.open();
       iframeDoc.write(result.template);
       iframeDoc.close();
       saveHistory();
-    } else {
-      console.warn("No saved template found, loading default homepage.html");
-      const res = await fetch("homepage.html");
+      return;
+    }
+
+    // 2) Fallback to static file
+    const res = await fetch(filename);
+    const html = await res.text();
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
+    saveHistory();
+  } catch (err) {
+    console.error("❌ Load failed:", err);
+    // final fallback
+    const res = await fetch("homepage.html").catch(() => null);
+    if (res) {
       const html = await res.text();
       const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
       iframeDoc.open();
@@ -354,8 +372,6 @@ async function loadTemplate() {
       iframeDoc.close();
       saveHistory();
     }
-  } catch (err) {
-    console.error("❌ Load failed:", err);
   }
 }
 
