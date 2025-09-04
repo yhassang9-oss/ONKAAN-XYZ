@@ -12,7 +12,7 @@ const fs = require("fs");
 const path = require("path");
 const bodyParser = require("body-parser");
 const mysql = require("mysql2/promise"); // ✅ MySQL/TiDB client
-const cors = require("cors"); // ✅ added
+const cors = require("cors"); // ✅ allow frontend
 
 const app = express();
 
@@ -120,6 +120,27 @@ app.post("/update", async (req, res) => {
   } catch (err) {
     console.error("DB Error:", err);
     res.status(500).json({ success: false, error: "Error saving file" });
+  }
+});
+
+// ✅ Load saved template by ID (filename)
+app.get("/api/load/:id", async (req, res) => {
+  const websiteId = req.params.id; // e.g. "homepage"
+  const filename = `${websiteId}.html`;
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT content FROM pages WHERE filename = ? LIMIT 1",
+      [filename]
+    );
+    if (rows.length > 0) {
+      res.json({ success: true, template: rows[0].content });
+    } else {
+      res.json({ success: false, error: "No saved template found" });
+    }
+  } catch (err) {
+    console.error("DB Error:", err);
+    res.status(500).json({ success: false, error: "Failed to load template" });
   }
 });
 
