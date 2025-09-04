@@ -44,7 +44,8 @@ app.get("/", (req, res) => {
 
 // --- Template route (iframe live preview) ---
 app.get("/template/:filename", async (req, res) => {
-  const { filename } = req.params;
+  let { filename } = req.params;
+  if (!filename.endsWith(".html")) filename += ".html"; // normalize
 
   try {
     // 1. Look for cached version in DB
@@ -79,7 +80,8 @@ app.get("/template/:filename", async (req, res) => {
 
 // Auto-serve any HTML page by name (with DB support)
 app.get("/:page", async (req, res, next) => {
-  const filename = `${req.params.page}.html`;
+  let filename = req.params.page;
+  if (!filename.endsWith(".html")) filename += ".html"; // normalize
 
   try {
     const [rows] = await pool.query(
@@ -105,10 +107,12 @@ app.get("/:page", async (req, res, next) => {
 
 // ✅ Save edits permanently in DB
 app.post("/update", async (req, res) => {
-  const { filename, content } = req.body;
+  let { filename, content } = req.body;
   if (!filename || !content) {
     return res.status(400).json({ success: false, error: "Missing filename or content" });
   }
+
+  if (!filename.endsWith(".html")) filename += ".html"; // normalize
 
   try {
     await pool.query(
@@ -122,9 +126,10 @@ app.post("/update", async (req, res) => {
   }
 });
 
-// ✅ Load saved template by ID (no .html auto-append)
+// ✅ Load saved template by ID
 app.get("/api/load/:id", async (req, res) => {
-  const websiteId = req.params.id; // must match save `filename`
+  let websiteId = req.params.id;
+  if (!websiteId.endsWith(".html")) websiteId += ".html"; // normalize
 
   try {
     const [rows] = await pool.query(
