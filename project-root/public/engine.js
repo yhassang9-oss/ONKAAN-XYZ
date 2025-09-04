@@ -305,18 +305,11 @@ publishBtn.addEventListener("click", () => {
 });
 
 // --- 🔹 NEW Save Button handler ---
-
-
-// --- 🔹 NEW Save Button handler ---
-// --- 🔹 NEW Save Button handler ---
 if (saveBtn) {
   saveBtn.addEventListener("click", async () => {
     const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-
-    // ✅ Save the *entire page HTML* (not just body)
     const template = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
-
-    const filename = "homepage.html"; // 👈 change later if needed
+    const filename = "homepage.html";
 
     try {
       const response = await fetch("https://onkaan-xyz23.onrender.com/update", {
@@ -339,18 +332,32 @@ if (saveBtn) {
   });
 }
 
-// --- Load homepage.html on startup ---
-document.addEventListener("DOMContentLoaded", () => {
-  fetch("homepage.html")
-    .then(res => res.text())
-    .then(html => {
+// --- 🔹 Load homepage.html from DB on startup ---
+async function loadTemplate() {
+  const websiteId = "homepage"; // match the filename
+  try {
+    const response = await fetch(`https://onkaan-xyz23.onrender.com/api/load/${websiteId}`);
+    const result = await response.json();
+    if (result.success) {
+      const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(result.template);
+      iframeDoc.close();
+      saveHistory();
+    } else {
+      console.warn("No saved template found, loading default homepage.html");
+      const res = await fetch("homepage.html");
+      const html = await res.text();
       const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
       iframeDoc.open();
       iframeDoc.write(html);
       iframeDoc.close();
       saveHistory();
-    });
-});
+    }
+  } catch (err) {
+    console.error("❌ Load failed:", err);
+  }
+}
 
-
-
+// --- Load when page starts ---
+document.addEventListener("DOMContentLoaded", loadTemplate);
