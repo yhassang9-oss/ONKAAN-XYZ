@@ -305,10 +305,7 @@ publishBtn.addEventListener("click", () => {
 });
 
 // --- 🔹 NEW Save Button handler ---
-if (saveBtn) {
-  saveBtn.addEventListener("click", async () => {
-    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-    const template = iframeDoc.body.innerHTML;
+
 
 // --- 🔹 NEW Save Button handler ---
 if (saveBtn) {
@@ -352,4 +349,5 @@ document.addEventListener("DOMContentLoaded", () => {
       saveHistory();
     });
 });
+
 
