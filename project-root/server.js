@@ -12,9 +12,15 @@ const fs = require("fs");
 const path = require("path");
 const bodyParser = require("body-parser");
 const mysql = require("mysql2/promise"); // ✅ MySQL/TiDB client
+const cors = require("cors"); // ✅ added
 
 const app = express();
-app.use(bodyParser.json());
+
+// ✅ allow frontend calls
+app.use(cors());
+
+// ✅ parse JSON with bigger size (for HTML, base64 images)
+app.use(bodyParser.json({ limit: "10mb" }));
 
 // ✅ TiDB connection pool (from .env)
 const pool = mysql.createPool({
