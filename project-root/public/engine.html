@@ -10,9 +10,9 @@
   <!-- Topbar -->
   <header class="topbar">
     <h1>ONKAAN Editor</h1>
-    <!-- ✅ Updated to call publishProject() -->
-   <button class="save-btn" id="publishBtn">Publish</button> <button id="saveBtn">💾 Save</button>
-
+    <!-- ✅ Publish and Save -->
+    <button class="save-btn" id="publishBtn">Publish</button>
+    <button id="saveBtn">💾 Save</button>
   </header>
 
   <!-- Sidebar -->
@@ -32,12 +32,14 @@
   <!-- Preview -->
   <main class="preview-area">
     <div class="preview-wrapper">
-      <iframe id="previewFrame" src="homepage.html"></iframe>
+      <!-- ✅ FIXED: no static src file, engine.js will inject -->
+      <iframe id="previewFrame"></iframe>
     </div>
   </main>
 
-  <!-- Button Design Panel -->
-  <div id="buttonDesignPanel" style="display:none; position:absolute; top:50px; left:220px; background:#fff; border:1px solid #ccc; padding:10px; z-index:9999;">
+  <!-- Button Design Panel (hidden by default) -->
+  <div id="buttonDesignPanel"
+       style="display:none; position:absolute; top:50px; left:220px; background:#fff; border:1px solid #ccc; padding:10px; z-index:9999;">
     <h3>Buy Now Designs</h3>
     <div class="designs">
       <button class="buy1">1</button>
@@ -60,6 +62,3 @@
   <script src="engine.js"></script>
 </body>
 </html>
-
-
-
