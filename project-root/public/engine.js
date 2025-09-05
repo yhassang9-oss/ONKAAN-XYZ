@@ -1,3 +1,5 @@
+// engine.js — robust, rebinds editors after srcdoc loads, with debugging
+const DEBUG = true;
 const textTool = document.getElementById("textTool");
 const selectTool = document.getElementById("selecttool");
 const undoBtn = document.getElementById("undo");
@@ -9,6 +11,10 @@ const previewFrame = document.getElementById("previewFrame");
 const publishBtn = document.querySelector(".save-btn");
 const saveBtn = document.getElementById("saveBtn");
 
+function log(...args){ if(DEBUG) console.log("[engine.js]", ...args); }
+function warn(...args){ console.warn("[engine.js]", ...args); }
+function error(...args){ console.error("[engine.js]", ...args); }
+
 let activeTool = null;
 let selectedElement = null;
 let historyStack = [];
@@ -16,24 +22,34 @@ let historyIndex = -1;
 let colorPanel = null;
 let buttonPanel = null;
 
-// --- Helper: get iframe doc ---
-function getIframeDoc() {
+// --- Helper: access iframe doc safely ---
+function getIframeDocUnsafe(){
+  // This may throw if cross-origin
   return previewFrame.contentDocument || previewFrame.contentWindow.document;
+}
+function getIframeDoc(){
+  try {
+    return getIframeDocUnsafe();
+  } catch(e){
+    error("Cannot access iframe document — likely cross-origin. Details:", e);
+    return null;
+  }
 }
 
 // --- Tool toggle ---
 function deactivateAllTools() {
   activeTool = null;
-  textTool.classList.remove("active-tool");
-  selectTool.classList.remove("active-tool");
+  textTool?.classList?.remove("active-tool");
+  selectTool?.classList?.remove("active-tool");
 
-  if (selectedElement) {
-    selectedElement.style.outline = "none";
-    removeHandles(getIframeDoc());
+  const doc = getIframeDoc();
+  if (selectedElement && doc) {
+    try { selectedElement.style.outline = "none"; } catch(e){}
+    removeHandles(doc);
     selectedElement = null;
   }
-  if (colorPanel) { colorPanel.remove(); colorPanel = null; }
-  if (buttonPanel) { buttonPanel.style.display = "none"; }
+  if (colorPanel) { try { colorPanel.remove(); } catch(e){}; colorPanel = null; }
+  if (buttonPanel) { try { buttonPanel.style.display = "none"; } catch(e){}; }
 }
 
 // --- History ---
@@ -43,116 +59,52 @@ function saveHistory() {
   historyStack = historyStack.slice(0, historyIndex + 1);
   historyStack.push(iframeDoc.body.innerHTML);
   historyIndex++;
+  log("history saved, index:", historyIndex);
 }
 function undo() {
   if (historyIndex > 0) {
     historyIndex--;
-    getIframeDoc().body.innerHTML = historyStack[historyIndex];
+    const doc = getIframeDoc();
+    if (doc) doc.body.innerHTML = historyStack[historyIndex];
   }
 }
 function redo() {
   if (historyIndex < historyStack.length - 1) {
     historyIndex++;
-    getIframeDoc().body.innerHTML = historyStack[historyIndex];
+    const doc = getIframeDoc();
+    if (doc) doc.body.innerHTML = historyStack[historyIndex];
   }
 }
 
 // --- Keyboard shortcuts ---
 document.addEventListener("keydown", e => {
-  if (e.ctrlKey && e.key === "z") { e.preventDefault(); undo(); }
-  else if (e.ctrlKey && e.key === "y") { e.preventDefault(); redo(); }
+  if (e.ctrlKey && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); }
+  else if (e.ctrlKey && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); }
 });
 
-// --- Tool click events ---
-textTool.addEventListener("click", () => {
+// --- Tool click events (parent controls only) ---
+textTool?.addEventListener("click", () => {
   if (activeTool === "text") deactivateAllTools();
   else { deactivateAllTools(); activeTool = "text"; textTool.classList.add("active-tool"); }
 });
-selectTool.addEventListener("click", () => {
+selectTool?.addEventListener("click", () => {
   if (activeTool === "select") deactivateAllTools();
   else { deactivateAllTools(); activeTool = "select"; selectTool.classList.add("active-tool"); }
 });
-undoBtn.addEventListener("click", undo);
-redoBtn.addEventListener("click", redo);
+undoBtn?.addEventListener("click", undo);
+redoBtn?.addEventListener("click", redo);
 
-// --- Iframe setup ---
-function bindIframeEvents() {
-  const iframeDoc = getIframeDoc();
-  if (!iframeDoc) return;
-
-  // Prevent double-binding
-  if (iframeDoc._eventsBound) return;
-  iframeDoc._eventsBound = true;
-
-  saveHistory();
-
-  iframeDoc.addEventListener("click", (e) => {
-    const el = e.target;
-
-    // Text tool
-    if (activeTool === "text") {
-      const newText = iframeDoc.createElement("div");
-      newText.textContent = "Type here...";
-      newText.contentEditable = "true";
-      newText.dataset.editable = "true";
-      newText.style.position = "absolute";
-      newText.style.left = e.pageX + "px";
-      newText.style.top = e.pageY + "px";
-      newText.style.fontSize = "16px";
-      newText.style.color = "black";
-      newText.style.outline = "none";
-      newText.style.cursor = "text";
-      iframeDoc.body.appendChild(newText);
-      newText.focus();
-      saveHistory();
-      deactivateAllTools();
-      return;
-    }
-
-    // Select tool
-    if (activeTool === "select") {
-      e.preventDefault();
-      e.stopPropagation();
-      if (selectedElement) {
-        selectedElement.style.outline = "none";
-        removeHandles(iframeDoc);
-      }
-
-      if (
-        (el.dataset.editable === "true") || el.tagName === "BUTTON" ||
-        el.tagName === "IMG" || el.classList.contains("slideshow-container") ||
-        el.tagName === "DIV" ||
-        ["P","H1","H2","H3","H4","H5","H6","SPAN","A","LABEL"].includes(el.tagName)
-      ) {
-        selectedElement = el;
-        selectedElement.style.outline = "2px dashed red";
-        makeResizable(selectedElement, iframeDoc);
-
-        if (["P","H1","H2","H3","H4","H5","H6","SPAN","A","LABEL"].includes(el.tagName)) {
-          selectedElement.contentEditable = "true";
-          selectedElement.dataset.editable = "true";
-          selectedElement.focus();
-          selectedElement.addEventListener("blur", () => saveHistory(), { once: true });
-        }
-      }
-    }
-  });
-}
-
-// --- Resize ---
-function removeHandles(doc) { doc.querySelectorAll(".resize-handle").forEach(h => h.remove()); }
+// --- Resize helpers ---
+function removeHandles(doc) { if(!doc) return; doc.querySelectorAll(".resize-handle").forEach(h => h.remove()); }
 function makeResizable(el, doc) {
+  if (!doc || !el) return;
   removeHandles(doc);
   const handle = doc.createElement("div");
   handle.className = "resize-handle";
-  handle.style.width = "10px";
-  handle.style.height = "10px";
-  handle.style.background = "red";
-  handle.style.position = "absolute";
-  handle.style.right = "0";
-  handle.style.bottom = "0";
-  handle.style.cursor = "se-resize";
-  handle.style.zIndex = "9999";
+  Object.assign(handle.style, {
+    width: "10px", height: "10px", background: "red",
+    position: "absolute", right: "0", bottom: "0", cursor: "se-resize", zIndex: "9999"
+  });
   el.style.position = "relative";
   el.appendChild(handle);
 
@@ -162,8 +114,8 @@ function makeResizable(el, doc) {
     isResizing = true;
     const startX = e.clientX;
     const startY = e.clientY;
-    const startWidth = parseInt(getComputedStyle(el).width, 10);
-    const startHeight = parseInt(getComputedStyle(el).height, 10);
+    const startWidth = parseInt(getComputedStyle(el).width, 10) || el.offsetWidth;
+    const startHeight = parseInt(getComputedStyle(el).height, 10) || el.offsetHeight;
 
     function resizeMove(ev) {
       if (!isResizing) return;
@@ -177,40 +129,150 @@ function makeResizable(el, doc) {
   });
 }
 
-// --- Color tool ---
-colorTool.addEventListener("click", () => {
-  const iframeDoc = getIframeDoc();
+// --- Core: attach event handlers inside iframe doc ---
+function attachIframeEventsOnce(doc){
+  if (!doc) { warn("attachIframeEventsOnce: no doc"); return; }
+  if (doc._eventsBound) { log("iframe events already bound"); return; }
+  doc._eventsBound = true;
+  log("Binding iframe events");
+
+  // record current state in history
+  saveHistory();
+
+  // click handler inside iframe
+  doc.addEventListener("click", (e) => {
+    const el = e.target;
+
+    // TEXT TOOL: place editable div
+    if (activeTool === "text") {
+      const newText = doc.createElement("div");
+      newText.textContent = "Type here...";
+      newText.contentEditable = "true";
+      newText.dataset.editable = "true";
+      newText.style.position = "absolute";
+      // Use client coordinates relative to iframe viewport
+      newText.style.left = (e.clientX + (doc.documentElement.scrollLeft || 0)) + "px";
+      newText.style.top = (e.clientY + (doc.documentElement.scrollTop || 0)) + "px";
+      newText.style.fontSize = "16px";
+      newText.style.color = "black";
+      newText.style.outline = "none";
+      newText.style.cursor = "text";
+      doc.body.appendChild(newText);
+      newText.focus();
+      saveHistory();
+      deactivateAllTools();
+      return;
+    }
+
+    // SELECT TOOL: select elements
+    if (activeTool === "select") {
+      e.preventDefault(); e.stopPropagation();
+      if (selectedElement) {
+        try { selectedElement.style.outline = "none"; } catch(e){}
+        removeHandles(doc);
+      }
+
+      const tag = el.tagName || "";
+      if (
+        (el.dataset && el.dataset.editable === "true") ||
+        tag === "BUTTON" || tag === "IMG" ||
+        el.classList?.contains?.("slideshow-container") ||
+        tag === "DIV" ||
+        ["P","H1","H2","H3","H4","H5","H6","SPAN","A","LABEL"].includes(tag)
+      ) {
+        selectedElement = el;
+        try { selectedElement.style.outline = "2px dashed red"; } catch(e){}
+        makeResizable(selectedElement, doc);
+
+        if (["P","H1","H2","H3","H4","H5","H6","SPAN","A","LABEL"].includes(tag)) {
+          selectedElement.contentEditable = "true";
+          selectedElement.dataset.editable = "true";
+          selectedElement.focus();
+          selectedElement.addEventListener("blur", () => saveHistory(), { once: true });
+        }
+      } else {
+        // clicked an area that is not selectable
+        selectedElement = null;
+      }
+    }
+  });
+
+  // ensure images added later are selectable: mutation observer to set dataset.editable if needed
+  const mo = new doc.defaultView.MutationObserver(muts => {
+    muts.forEach(m => {
+      if (m.addedNodes) {
+        m.addedNodes.forEach(n => {
+          if (n.nodeType === 1) {
+            if (["P","DIV","SPAN"].includes(n.tagName)) n.dataset.editable = "true";
+          }
+        });
+      }
+    });
+  });
+  mo.observe(doc.body, { childList: true, subtree: true });
+}
+
+// --- Utility: wait for iframe doc to be accessible and ready ---
+function waitForIframeDoc(timeout = 4000){
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    (function poll(){
+      try {
+        const doc = getIframeDocUnsafe(); // may throw cross-origin
+        if (doc && (doc.readyState === "complete" || doc.body)) {
+          resolve(doc);
+          return;
+        }
+      } catch(err){
+        // cross-origin access -> reject immediately
+        reject(err);
+        return;
+      }
+      if (Date.now() - start > timeout) {
+        reject(new Error("Timed out waiting for iframe document"));
+        return;
+      }
+      setTimeout(poll, 100);
+    })();
+  });
+}
+
+// --- Color tool (parent button) ---
+colorTool?.addEventListener("click", () => {
+  const doc = getIframeDoc();
+  if (!doc) { alert("Cannot access preview. Make sure editor & preview are same origin and loaded via HTTP/HTTPS."); return; }
   if (!selectedElement) { alert("Select an element first!"); return; }
   if (colorPanel) { colorPanel.remove(); colorPanel = null; return; }
 
-  colorPanel = iframeDoc.createElement("div");
-  colorPanel.style.position = "fixed";
-  colorPanel.style.top = "20px";
-  colorPanel.style.left = "20px";
-  colorPanel.style.background = "#fff";
-  colorPanel.style.border = "1px solid #ccc";
-  colorPanel.style.padding = "10px";
-  colorPanel.style.display = "grid";
-  colorPanel.style.gridTemplateColumns = "repeat(8, 30px)";
-  colorPanel.style.gridGap = "5px";
-  colorPanel.style.zIndex = "9999";
+  colorPanel = doc.createElement("div");
+  Object.assign(colorPanel.style, {
+    position: "fixed", top: "20px", left: "20px", background: "#fff",
+    border: "1px solid #ccc", padding: "10px", display: "grid",
+    gridTemplateColumns: "repeat(8, 30px)", gap: "5px", zIndex: "9999"
+  });
   colorPanel.addEventListener("mousedown", e => e.stopPropagation());
   colorPanel.addEventListener("click", e => e.stopPropagation());
 
   const colors = ["#000","#808080","#C0C0C0","#FFF","#800000","#F00","#808000","#FF0","#008000","#0F0","#008080","#0FF","#00F","#800080","#F0F"];
   colors.forEach(c => {
-    const swatch = iframeDoc.createElement("div");
-    swatch.style.width = "30px"; swatch.style.height = "30px"; swatch.style.background = c;
-    swatch.style.cursor = "pointer"; swatch.style.border = "1px solid #555";
-    swatch.addEventListener("click", () => { if (!selectedElement) return; if (selectedElement.dataset.editable === "true") selectedElement.style.color = c; else selectedElement.style.backgroundColor = c; saveHistory(); });
+    const swatch = doc.createElement("div");
+    Object.assign(swatch.style, { width: "30px", height: "30px", background: c, cursor: "pointer", border: "1px solid #555" });
+    swatch.addEventListener("click", () => {
+      if (!selectedElement) return;
+      if (selectedElement.dataset && selectedElement.dataset.editable === "true") selectedElement.style.color = c;
+      else selectedElement.style.backgroundColor = c;
+      saveHistory();
+    });
     colorPanel.appendChild(swatch);
   });
 
-  iframeDoc.body.appendChild(colorPanel);
+  doc.body.appendChild(colorPanel);
 });
 
 // --- Image Tool ---
-imageTool.addEventListener("click", () => {
+imageTool?.addEventListener("click", () => {
+  const doc = getIframeDoc();
+  if (!doc) { alert("Cannot access preview."); return; }
   if (!selectedElement || !(selectedElement.tagName === "IMG" || selectedElement.classList.contains("slideshow-container"))) { alert("Select an image first!"); return; }
   const input = document.createElement("input");
   input.type = "file"; input.accept = "image/*"; input.click();
@@ -229,20 +291,15 @@ imageTool.addEventListener("click", () => {
 });
 
 // --- Button Tool ---
-buttonTool.addEventListener("click", () => {
-  const iframeDoc = getIframeDoc();
+buttonTool?.addEventListener("click", () => {
+  const doc = getIframeDoc();
+  if (!doc) { alert("Cannot access preview."); return; }
   if (!selectedElement || selectedElement.tagName !== "BUTTON") { alert("Select a button first!"); return; }
 
   if (!buttonPanel) {
-    buttonPanel = iframeDoc.createElement("div");
+    buttonPanel = doc.createElement("div");
     buttonPanel.id = "buttonDesignPanel";
-    buttonPanel.style.position = "fixed"; 
-    buttonPanel.style.top = "50px"; 
-    buttonPanel.style.left = "20px";
-    buttonPanel.style.background = "#fff"; 
-    buttonPanel.style.border = "1px solid #ccc"; 
-    buttonPanel.style.padding = "10px";
-    buttonPanel.style.zIndex = "9999";
+    Object.assign(buttonPanel.style, { position: "fixed", top: "50px", left: "20px", background: "#fff", border: "1px solid #ccc", padding: "10px", zIndex: "9999" });
     buttonPanel.innerHTML = `
       <h3>Buy Now Designs</h3>
       <div class="designs">
@@ -261,7 +318,7 @@ buttonTool.addEventListener("click", () => {
         <button class="addDesign5">5</button>
       </div>
     `;
-    iframeDoc.body.appendChild(buttonPanel);
+    doc.body.appendChild(buttonPanel);
 
     buttonPanel.querySelectorAll(".designs:nth-of-type(1) button").forEach(btn => {
       btn.addEventListener("click", () => { if (selectedElement) selectedElement.className = btn.className; saveHistory(); });
@@ -275,18 +332,18 @@ buttonTool.addEventListener("click", () => {
 });
 
 // --- Publish Button ---
-publishBtn.addEventListener("click", () => {
-  const iframeDoc = getIframeDoc();
-  const htmlContent = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
+publishBtn?.addEventListener("click", () => {
+  const doc = getIframeDoc();
+  if (!doc) { alert("Cannot access preview."); return; }
+  const htmlContent = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
 
   let cssContent = "";
-  iframeDoc.querySelectorAll("style").forEach(tag => cssContent += tag.innerHTML + "\n");
-
+  doc.querySelectorAll("style").forEach(tag => cssContent += tag.innerHTML + "\n");
   let jsContent = "";
-  iframeDoc.querySelectorAll("script").forEach(tag => jsContent += tag.innerHTML + "\n");
+  doc.querySelectorAll("script").forEach(tag => jsContent += tag.innerHTML + "\n");
 
   const images = [];
-  iframeDoc.querySelectorAll("img").forEach((img, i) => {
+  doc.querySelectorAll("img").forEach((img, i) => {
     try {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -296,20 +353,14 @@ publishBtn.addEventListener("click", () => {
       const dataUrl = canvas.toDataURL("image/png");
       images.push({ name: `image${i + 1}.png`, data: dataUrl.split(",")[1] });
     } catch (err) {
-      console.warn("Skipping image (CORS issue):", img.src);
+      warn("Skipping image (CORS issue):", img.src);
     }
   });
 
   fetch("https://onkaanpublishprototype-17.onrender.com/publish", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      projectName: "MyProject",
-      html: htmlContent,
-      css: cssContent,
-      js: jsContent,
-      images
-    })
+    body: JSON.stringify({ projectName: "MyProject", html: htmlContent, css: cssContent, js: jsContent, images })
   })
   .then(res => res.json())
   .then(data => alert(data.message))
@@ -319,59 +370,80 @@ publishBtn.addEventListener("click", () => {
 // --- Save Button ---
 if (saveBtn) {
   saveBtn.addEventListener("click", async () => {
-    const iframeDoc = getIframeDoc();
-    const template = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
+    const doc = getIframeDoc();
+    if (!doc) { alert("Cannot access preview to save."); return; }
+    const template = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
     const filename = "homepage.html";
-
     try {
       const response = await fetch("https://onkaan-xyz23.onrender.com/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename, content: template })
       });
-
       const data = await response.json().catch(() => ({}));
-
-      if (response.ok) {
-        alert("✅ Saved successfully!");
-      } else {
-        alert("❌ Save failed: " + (data.error || "Server error"));
-      }
+      if (response.ok) alert("✅ Saved successfully!");
+      else alert("❌ Save failed: " + (data.error || "Server error"));
     } catch (err) {
-      console.error("Save error:", err);
+      error("Save error:", err);
       alert("❌ Save failed: " + err.message);
     }
   });
 }
 
-// --- Load template from DB or static ---
+// --- Load template (DB then static) and bind events robustly ---
 async function loadTemplate() {
   const filename = "homepage.html";
   try {
     const api = `https://onkaan-xyz23.onrender.com/api/load/${encodeURIComponent(filename)}`;
     const response = await fetch(api);
     const result = await response.json();
-
     if (result && result.success && result.template) {
+      previewFrame.removeAttribute("src"); // ensure not navigating to different doc
       previewFrame.srcdoc = result.template;
-      setTimeout(bindIframeEvents, 200);
+      try {
+        const doc = await waitForIframeDoc(3000);
+        attachIframeEventsOnce(doc);
+        log("Loaded template from DB and bound events");
+      } catch (err) {
+        error("Failed to bind after srcdoc (DB result):", err);
+        alert("Editor can't access the preview document. Check console for cross-origin errors.");
+      }
       return;
     }
   } catch (err) {
-    console.error("❌ Load failed:", err);
+    warn("DB load attempt failed:", err);
   }
 
+  // Fallback to static file in same origin (served from /public)
   try {
-    const res = await fetch(filename);
+    // use root-relative path so same origin is used
+    const res = await fetch("/" + filename);
+    if (!res.ok) throw new Error("Static fetch failed " + res.status);
     const html = await res.text();
+    previewFrame.removeAttribute("src");
     previewFrame.srcdoc = html;
-    setTimeout(bindIframeEvents, 200);
+    try {
+      const doc = await waitForIframeDoc(3000);
+      attachIframeEventsOnce(doc);
+      log("Loaded static template and bound events");
+    } catch (err) {
+      error("Failed to bind after srcdoc (static):", err);
+      alert("Editor can't access the preview document. Check console for cross-origin errors.");
+    }
   } catch (e) {
-    console.error("❌ Static fallback failed:", e);
+    error("Static fallback failed:", e);
+    previewFrame.srcdoc = "<!DOCTYPE html><html><body><h3>No template available</h3></body></html>";
   }
 }
 
-// --- Run ---
+// --- init ---
 document.addEventListener("DOMContentLoaded", () => {
+  // Quick cross-origin check: are parent and iframe expected to share origin?
+  try {
+    const sameOriginTest = window.location.origin;
+    log("Parent origin:", sameOriginTest);
+  } catch(e){
+    warn("Could not read parent origin (rare):", e);
+  }
   loadTemplate();
 });
