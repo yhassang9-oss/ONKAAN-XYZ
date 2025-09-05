@@ -1,4 +1,4 @@
-// engine.js — full fixed version (same-origin, working tools)
+// engine.js — full fixed version (iframe src, working tools, history)
 
 const DEBUG = true;
 const textTool = document.getElementById("textTool");
@@ -13,6 +13,7 @@ const publishBtn = document.getElementById("publishBtn");
 const saveBtn = document.getElementById("saveBtn");
 
 function log(...args) { if (DEBUG) console.log("[engine.js]", ...args); }
+function warn(...args) { if (DEBUG) console.warn("[engine.js]", ...args); }
 function error(...args) { console.error("[engine.js]", ...args); }
 
 let activeTool = null;
@@ -27,7 +28,7 @@ function getIframeDoc() {
   try {
     return previewFrame.contentDocument || previewFrame.contentWindow.document;
   } catch (e) {
-    error("Cross-origin access blocked:", e);
+    error("Cannot access iframe (cross-origin?):", e);
     return null;
   }
 }
@@ -47,13 +48,14 @@ function deactivateAllTools() {
   if (buttonPanel) { buttonPanel.style.display = "none"; }
 }
 
-// --- History system ---
+// --- History ---
 function saveHistory() {
-  const iframeDoc = getIframeDoc();
-  if (!iframeDoc || !iframeDoc.body) return;
+  const doc = getIframeDoc();
+  if (!doc || !doc.body) return;
   historyStack = historyStack.slice(0, historyIndex + 1);
-  historyStack.push(iframeDoc.body.innerHTML);
+  historyStack.push(doc.body.innerHTML);
   historyIndex++;
+  log("History saved, index:", historyIndex);
 }
 
 function undo() {
@@ -72,7 +74,7 @@ function redo() {
   }
 }
 
-// --- Tool event bindings ---
+// --- Tool bindings ---
 textTool?.addEventListener("click", () => {
   if (activeTool === "text") deactivateAllTools();
   else { deactivateAllTools(); activeTool = "text"; textTool.classList.add("active-tool"); }
@@ -96,14 +98,9 @@ function makeResizable(el, doc) {
   const handle = doc.createElement("div");
   handle.className = "resize-handle";
   Object.assign(handle.style, {
-    width: "10px",
-    height: "10px",
-    background: "red",
-    position: "absolute",
-    right: "0",
-    bottom: "0",
-    cursor: "se-resize",
-    zIndex: "9999"
+    width: "10px", height: "10px", background: "red",
+    position: "absolute", right: "0", bottom: "0",
+    cursor: "se-resize", zIndex: "9999"
   });
   el.style.position = "relative";
   el.appendChild(handle);
@@ -132,7 +129,7 @@ function makeResizable(el, doc) {
   });
 }
 
-// --- Events inside iframe ---
+// --- Iframe events ---
 function attachIframeEventsOnce(doc) {
   if (doc._eventsBound) return;
   doc._eventsBound = true;
@@ -142,7 +139,7 @@ function attachIframeEventsOnce(doc) {
   doc.addEventListener("click", (e) => {
     const el = e.target;
 
-    // Add new text
+    // Text tool
     if (activeTool === "text") {
       const newText = doc.createElement("div");
       newText.textContent = "Type here...";
@@ -158,40 +155,60 @@ function attachIframeEventsOnce(doc) {
       return;
     }
 
-    // Select element
+    // Select tool
     if (activeTool === "select") {
       if (selectedElement) {
         selectedElement.style.outline = "none";
         removeHandles(doc);
       }
+
       selectedElement = el;
-      selectedElement.style.outline = "2px dashed red";
-      makeResizable(selectedElement, doc);
+      const tag = el.tagName;
+      if (["DIV","P","SPAN","IMG","BUTTON"].includes(tag) || el.dataset.editable === "true") {
+        selectedElement.style.outline = "2px dashed red";
+        makeResizable(selectedElement, doc);
+        if (["DIV","P","SPAN"].includes(tag)) {
+          selectedElement.contentEditable = "true";
+          selectedElement.dataset.editable = "true";
+        }
+      } else {
+        selectedElement = null;
+      }
     }
   });
 }
 
-// --- Load template (local same-origin) ---
-async function loadTemplate() {
-  const filename = "homepage.html";
-  try {
-    const res = await fetch("/" + filename);
-    if (!res.ok) throw new Error("Static fetch failed " + res.status);
-    const html = await res.text();
+// --- Load template ---
+function loadTemplate() {
+  const filename = "/homepage.html"; // same-origin
+  previewFrame.src = filename;
 
-    // Put template into iframe using srcdoc (same-origin)
-    previewFrame.removeAttribute("src");
-    previewFrame.srcdoc = html;
-
-    setTimeout(() => {
-      const doc = getIframeDoc();
-      if (doc) attachIframeEventsOnce(doc);
-    }, 300);
-  } catch (e) {
-    error("Load template failed:", e);
-    previewFrame.srcdoc = "<!DOCTYPE html><html><body><h3>No template available</h3></body></html>";
-  }
+  previewFrame.onload = () => {
+    const doc = getIframeDoc();
+    if (doc) attachIframeEventsOnce(doc);
+  };
 }
+
+// --- Save button ---
+saveBtn?.addEventListener("click", async () => {
+  const doc = getIframeDoc();
+  if (!doc) return alert("Cannot access preview to save");
+  const template = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+
+  try {
+    const res = await fetch("/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "homepage.html", content: template })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) alert("✅ Saved successfully!");
+    else alert("❌ Save failed: " + (data.error || "Server error"));
+  } catch (err) {
+    error("Save error:", err);
+    alert("❌ Save failed: " + err.message);
+  }
+});
 
 // --- Init ---
 document.addEventListener("DOMContentLoaded", () => {
