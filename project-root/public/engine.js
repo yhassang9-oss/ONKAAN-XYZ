@@ -76,9 +76,13 @@ undoBtn.addEventListener("click", undo);
 redoBtn.addEventListener("click", redo);
 
 // --- Iframe setup ---
-function attachIframeEvents() {
+function bindIframeEvents() {
   const iframeDoc = getIframeDoc();
   if (!iframeDoc) return;
+
+  // Prevent double-binding
+  if (iframeDoc._eventsBound) return;
+  iframeDoc._eventsBound = true;
 
   saveHistory();
 
@@ -346,37 +350,28 @@ async function loadTemplate() {
   try {
     const api = `https://onkaan-xyz23.onrender.com/api/load/${encodeURIComponent(filename)}`;
     const response = await fetch(api);
-// --- Load homepage.html from DB on startup ---
-async function loadTemplate() {
-  const filename = "homepage.html";
-  try {
-    // 1) Try DB-backed version
-    const api = `https://onkaan-xyz23.onrender.com/api/load/${encodeURIComponent(filename)}`;
-    const response = await fetch(api);
     const result = await response.json();
 
     if (result && result.success && result.template) {
-      // ✅ Inject HTML into iframe in same origin
       previewFrame.srcdoc = result.template;
+      setTimeout(bindIframeEvents, 200);
       return;
     }
   } catch (err) {
     console.error("❌ Load failed:", err);
   }
 
-  // 2) Fallback to static file
   try {
     const res = await fetch(filename);
     const html = await res.text();
-    previewFrame.srcdoc = html;   // ✅ Always use srcdoc
+    previewFrame.srcdoc = html;
+    setTimeout(bindIframeEvents, 200);
   } catch (e) {
     console.error("❌ Static fallback failed:", e);
   }
 }
 
-
 // --- Run ---
 document.addEventListener("DOMContentLoaded", () => {
   loadTemplate();
 });
-
