@@ -7,8 +7,6 @@ const imageTool = document.getElementById("image");
 const buttonTool = document.getElementById("Buttons");
 const previewFrame = document.getElementById("previewFrame");
 const publishBtn = document.querySelector(".save-btn");
-
-// 🔹 NEW: save button (separate from publish)
 const saveBtn = document.getElementById("saveBtn");
 
 let activeTool = null;
@@ -18,6 +16,11 @@ let historyIndex = -1;
 let colorPanel = null;
 let buttonPanel = null;
 
+// --- Helper: get iframe doc ---
+function getIframeDoc() {
+  return previewFrame.contentDocument || previewFrame.contentWindow.document;
+}
+
 // --- Tool toggle ---
 function deactivateAllTools() {
   activeTool = null;
@@ -26,7 +29,7 @@ function deactivateAllTools() {
 
   if (selectedElement) {
     selectedElement.style.outline = "none";
-    removeHandles(previewFrame.contentDocument || previewFrame.contentWindow.document);
+    removeHandles(getIframeDoc());
     selectedElement = null;
   }
   if (colorPanel) { colorPanel.remove(); colorPanel = null; }
@@ -35,7 +38,7 @@ function deactivateAllTools() {
 
 // --- History ---
 function saveHistory() {
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+  const iframeDoc = getIframeDoc();
   if (!iframeDoc || !iframeDoc.body) return;
   historyStack = historyStack.slice(0, historyIndex + 1);
   historyStack.push(iframeDoc.body.innerHTML);
@@ -44,15 +47,13 @@ function saveHistory() {
 function undo() {
   if (historyIndex > 0) {
     historyIndex--;
-    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-    iframeDoc.body.innerHTML = historyStack[historyIndex];
+    getIframeDoc().body.innerHTML = historyStack[historyIndex];
   }
 }
 function redo() {
   if (historyIndex < historyStack.length - 1) {
     historyIndex++;
-    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-    iframeDoc.body.innerHTML = historyStack[historyIndex];
+    getIframeDoc().body.innerHTML = historyStack[historyIndex];
   }
 }
 
@@ -74,10 +75,11 @@ selectTool.addEventListener("click", () => {
 undoBtn.addEventListener("click", undo);
 redoBtn.addEventListener("click", redo);
 
-// --- Iframe logic ---
-previewFrame.addEventListener("load", () => {
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+// --- Iframe setup ---
+function attachIframeEvents() {
+  const iframeDoc = getIframeDoc();
   if (!iframeDoc) return;
+
   saveHistory();
 
   iframeDoc.addEventListener("click", (e) => {
@@ -116,7 +118,7 @@ previewFrame.addEventListener("load", () => {
         (el.dataset.editable === "true") || el.tagName === "BUTTON" ||
         el.tagName === "IMG" || el.classList.contains("slideshow-container") ||
         el.tagName === "DIV" ||
-        ["P", "H1", "H2", "H3", "H4", "H5", "H6", "SPAN", "A", "LABEL"].includes(el.tagName)
+        ["P","H1","H2","H3","H4","H5","H6","SPAN","A","LABEL"].includes(el.tagName)
       ) {
         selectedElement = el;
         selectedElement.style.outline = "2px dashed red";
@@ -131,7 +133,7 @@ previewFrame.addEventListener("load", () => {
       }
     }
   });
-});
+}
 
 // --- Resize ---
 function removeHandles(doc) { doc.querySelectorAll(".resize-handle").forEach(h => h.remove()); }
@@ -173,8 +175,8 @@ function makeResizable(el, doc) {
 
 // --- Color tool ---
 colorTool.addEventListener("click", () => {
+  const iframeDoc = getIframeDoc();
   if (!selectedElement) { alert("Select an element first!"); return; }
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
   if (colorPanel) { colorPanel.remove(); colorPanel = null; return; }
 
   colorPanel = iframeDoc.createElement("div");
@@ -224,8 +226,8 @@ imageTool.addEventListener("click", () => {
 
 // --- Button Tool ---
 buttonTool.addEventListener("click", () => {
+  const iframeDoc = getIframeDoc();
   if (!selectedElement || selectedElement.tagName !== "BUTTON") { alert("Select a button first!"); return; }
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
 
   if (!buttonPanel) {
     buttonPanel = iframeDoc.createElement("div");
@@ -270,18 +272,15 @@ buttonTool.addEventListener("click", () => {
 
 // --- Publish Button ---
 publishBtn.addEventListener("click", () => {
-  const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+  const iframeDoc = getIframeDoc();
   const htmlContent = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
 
-  // inline styles
   let cssContent = "";
   iframeDoc.querySelectorAll("style").forEach(tag => cssContent += tag.innerHTML + "\n");
 
-  // inline scripts
   let jsContent = "";
   iframeDoc.querySelectorAll("script").forEach(tag => jsContent += tag.innerHTML + "\n");
 
-  // collect images inside iframe
   const images = [];
   iframeDoc.querySelectorAll("img").forEach((img, i) => {
     try {
@@ -290,7 +289,7 @@ publishBtn.addEventListener("click", () => {
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       ctx.drawImage(img, 0, 0);
-      const dataUrl = canvas.toDataURL("image/png"); // convert to base64
+      const dataUrl = canvas.toDataURL("image/png");
       images.push({ name: `image${i + 1}.png`, data: dataUrl.split(",")[1] });
     } catch (err) {
       console.warn("Skipping image (CORS issue):", img.src);
@@ -313,12 +312,10 @@ publishBtn.addEventListener("click", () => {
   .catch(err => alert("Error sending files: " + err));
 });
 
-// --- Save Button handler ---
+// --- Save Button ---
 if (saveBtn) {
   saveBtn.addEventListener("click", async () => {
-    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-
-    // ✅ Save the entire page HTML
+    const iframeDoc = getIframeDoc();
     const template = "<!DOCTYPE html>\n" + iframeDoc.documentElement.outerHTML;
     const filename = "homepage.html";
 
@@ -343,33 +340,34 @@ if (saveBtn) {
   });
 }
 
-// --- Load homepage.html from DB on startup ---
+// --- Load template from DB or static ---
 async function loadTemplate() {
   const filename = "homepage.html";
   try {
-    // 1) Try DB-backed version
     const api = `https://onkaan-xyz23.onrender.com/api/load/${encodeURIComponent(filename)}`;
     const response = await fetch(api);
     const result = await response.json();
 
     if (result && result.success && result.template) {
-      previewFrame.srcdoc = result.template;   // ✅ safe way to load into iframe
+      previewFrame.srcdoc = result.template;
+      setTimeout(attachIframeEvents, 200); // attach after loading
       return;
     }
   } catch (err) {
     console.error("❌ Load failed:", err);
   }
 
-  // 2) Fallback to static file
   try {
     const res = await fetch(filename);
-    previewFrame.srcdoc = await res.text();
+    const text = await res.text();
+    previewFrame.srcdoc = text;
+    setTimeout(attachIframeEvents, 200);
   } catch (e) {
     console.error("❌ Static fallback failed:", e);
   }
 }
 
-// --- Load template AFTER page is ready ---
+// --- Run ---
 document.addEventListener("DOMContentLoaded", () => {
   loadTemplate();
 });
