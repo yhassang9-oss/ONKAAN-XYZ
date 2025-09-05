@@ -22,17 +22,20 @@ app.use(cors());
 // ✅ parse JSON with bigger size (for HTML, base64 images)
 app.use(bodyParser.json({ limit: "10mb" }));
 
-// ✅ TiDB connection pool (from .env)
-const pool = mysql.createPool({
+// ✅ TiDB/MySQL connection pool
+let poolConfig = {
   host: process.env.DB_HOST,
   user: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
-  port: process.env.DB_PORT,
-  ssl: {
-    ca: process.env.DB_CA || fs.readFileSync(path.join(__dirname, "ca.pem"), "utf8")
-  },
-});
+  port: process.env.DB_PORT
+};
+
+// Optional SSL (only if CA is provided)
+if (process.env.DB_CA) {
+  poolConfig.ssl = { ca: process.env.DB_CA };
+}
+const pool = mysql.createPool(poolConfig);
 
 // Serve static files from /public
 app.use(express.static(path.join(__dirname, "public")));
@@ -47,13 +50,17 @@ app.get("/template/:filename", async (req, res) => {
   let { filename } = req.params;
   if (!filename.endsWith(".html")) filename += ".html"; // normalize
 
+  console.log("🔍 /template requested:", filename);
+
   try {
     // 1. Look for cached version in DB
     const [rows] = await pool.query(
       "SELECT content FROM pages WHERE filename = ? LIMIT 1",
       [filename]
     );
+
     if (rows.length > 0) {
+      console.log("✅ Loaded from DB:", filename);
       res.type("html").send(rows[0].content);
       return;
     }
@@ -68,13 +75,23 @@ app.get("/template/:filename", async (req, res) => {
 
     // 4. Serve file if exists
     if (fs.existsSync(filePath)) {
+      console.log("📂 Loaded from file:", filePath);
       res.sendFile(filePath);
     } else {
-      res.status(404).send("File not found");
+      console.warn("⚠️ Not found:", filename);
+      res
+        .type("html")
+        .send(
+          `<!DOCTYPE html><html><body><h3>⚠️ Template "${filename}" not found</h3></body></html>`
+        );
     }
   } catch (err) {
-    console.error("DB Error:", err);
-    res.status(500).send("Database error");
+    console.error("❌ DB Error in /template:", err);
+    res
+      .type("html")
+      .send(
+        "<!DOCTYPE html><html><body><h3>❌ Database error while loading template</h3></body></html>"
+      );
   }
 });
 
@@ -83,24 +100,30 @@ app.get("/:page", async (req, res, next) => {
   let filename = req.params.page;
   if (!filename.endsWith(".html")) filename += ".html"; // normalize
 
+  console.log("🔍 /:page requested:", filename);
+
   try {
     const [rows] = await pool.query(
       "SELECT content FROM pages WHERE filename = ? LIMIT 1",
       [filename]
     );
+
     if (rows.length > 0) {
+      console.log("✅ Loaded from DB:", filename);
       res.type("html").send(rows[0].content);
       return;
     }
 
     const filePath = path.join(__dirname, "public", filename);
     if (fs.existsSync(filePath)) {
+      console.log("📂 Loaded from file:", filePath);
       res.sendFile(filePath);
     } else {
+      console.warn("⚠️ Page not found:", filename);
       next();
     }
   } catch (err) {
-    console.error("DB Error:", err);
+    console.error("❌ DB Error in /:page:", err);
     res.status(500).send("Database error");
   }
 });
@@ -109,10 +132,13 @@ app.get("/:page", async (req, res, next) => {
 app.post("/update", async (req, res) => {
   let { filename, content } = req.body;
   if (!filename || !content) {
-    return res.status(400).json({ success: false, error: "Missing filename or content" });
+    return res
+      .status(400)
+      .json({ success: false, error: "Missing filename or content" });
   }
 
   if (!filename.endsWith(".html")) filename += ".html"; // normalize
+  console.log("💾 Saving file:", filename);
 
   try {
     await pool.query(
@@ -121,7 +147,7 @@ app.post("/update", async (req, res) => {
     );
     res.json({ success: true, message: "✅ Saved successfully!" });
   } catch (err) {
-    console.error("DB Error:", err);
+    console.error("❌ DB Error in /update:", err);
     res.status(500).json({ success: false, error: "Error saving file" });
   }
 });
@@ -131,19 +157,26 @@ app.get("/api/load/:id", async (req, res) => {
   let websiteId = req.params.id;
   if (!websiteId.endsWith(".html")) websiteId += ".html"; // normalize
 
+  console.log("🔍 /api/load requested:", websiteId);
+
   try {
     const [rows] = await pool.query(
       "SELECT content FROM pages WHERE filename = ? LIMIT 1",
       [websiteId]
     );
+
     if (rows.length > 0) {
+      console.log("✅ Loaded from DB:", websiteId);
       res.json({ success: true, template: rows[0].content });
     } else {
+      console.warn("⚠️ No saved template:", websiteId);
       res.json({ success: false, error: "No saved template found" });
     }
   } catch (err) {
-    console.error("DB Error:", err);
-    res.status(500).json({ success: false, error: "Failed to load template" });
+    console.error("❌ DB Error in /api/load:", err);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to load template" });
   }
 });
 
@@ -151,9 +184,10 @@ app.get("/api/load/:id", async (req, res) => {
 app.post("/reset", async (req, res) => {
   try {
     await pool.query("DELETE FROM pages");
+    console.log("🗑️ Pages table cleared");
     res.json({ success: true });
   } catch (err) {
-    console.error("DB Error:", err);
+    console.error("❌ DB Error in /reset:", err);
     res.status(500).json({ success: false, error: "Error resetting pages" });
   }
 });
@@ -175,8 +209,8 @@ app.get("/send-template", async (req, res) => {
           service: "gmail",
           auth: {
             user: "yourgmail@gmail.com",
-            pass: "yourapppassword",
-          },
+            pass: "yourapppassword"
+          }
         });
 
         let mailOptions = {
@@ -184,27 +218,29 @@ app.get("/send-template", async (req, res) => {
           to: "receiver@gmail.com",
           subject: "Full Template",
           text: "Here are all the template files zipped.",
-          attachments: [{ filename: "template.zip", path: zipPath }],
+          attachments: [{ filename: "template.zip", path: zipPath }]
         };
 
         await transporter.sendMail(mailOptions);
         res.send("Template sent successfully!");
       } catch (mailErr) {
-        console.error("Email send error:", mailErr);
+        console.error("❌ Email send error:", mailErr);
         res.status(500).send("Error sending email");
       }
     });
 
     output.on("error", (zipErr) => {
-      console.error("Zip creation error:", zipErr);
+      console.error("❌ Zip creation error:", zipErr);
       res.status(500).send("Error creating zip");
     });
   } catch (err) {
-    console.error("Unexpected error:", err);
+    console.error("❌ Unexpected error in /send-template:", err);
     res.status(500).send("Error sending template");
   }
 });
 
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`✅ Server running on http://localhost:${PORT}`)
+);
